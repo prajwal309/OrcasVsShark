@@ -10,7 +10,7 @@ Private casual online rooms are available at `/online` when Supabase is configur
 
 ## Run
 
-Use Node 22.12 or newer in the Node 22 release line and npm 10.
+Use the latest Node.js 22.x release and npm 10. Run `nvm use` to select the project’s Node version if you use nvm.
 
 ```sh
 npm ci

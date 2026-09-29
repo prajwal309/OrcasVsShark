@@ -3,7 +3,7 @@
 Phase 1 requires no environment variables, authentication services, database, or paid services. Use separate Vercel preview and production environments. Never add production credentials to a preview.
 
 1. Push this fresh project to a new repository after reviewing the files.
-2. Import it into Vercel with the Next.js preset, Node 22, install command `npm ci`, and build command `npm run build`.
+2. Import it into Vercel with the Next.js preset, Node 22.x (declared in `package.json`), install command `npm ci`, and build command `npm run build`.
 3. Deploy a preview (not production), then check `/api/health`, `/play`, both victory paths, keyboard/mobile play, refresh recovery, and browser console output.
 4. Record the immutable preview URL and the source commit before promotion.
 
