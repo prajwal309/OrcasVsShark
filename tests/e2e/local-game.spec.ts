@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import victories from "../fixtures/victories.json";
+import victories from "../fixtures/victories.json" with { type: "json" };
 import type { Move } from "../../lib/game/types";
 
 const node = (page: Page, name: string) =>

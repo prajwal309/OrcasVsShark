@@ -1,4 +1,4 @@
-# Architecture — Phase 1
+# Architecture — Local play and casual online rooms
 
 ## Decisions
 
@@ -14,14 +14,14 @@ The board exposes 25 labeled, focusable SVG buttons. Arrow navigation follows vi
 
 Sound is an original short Web Audio tone generated only after a move when explicitly enabled. No sound file, autoplay, external artwork, tracking, account data, or secret is involved.
 
-## Security boundary
+## Online rooms and security boundary
 
-Phase 1 has no authenticated API, user-generated public content, server game writes, or database connection. `/api/health` is read-only. Headers deny framing, objects, camera, microphone, and geolocation. CSP limits resources to self, with inline scripts/styles for Next.js hydration and dynamic SVG progress styling. Before authenticated online play, move to nonce-based script CSP and implement server action authorization, rate limits, Supabase row-level security, privacy/deletion workflows, and all multiplayer transaction invariants in AGENTS.md.
+The first scoped Phase 3 increment adds private invite rooms at `/online` and `/game/[gameId]`. `components/game/game.tsx` accepts an optional online controller and reuses the local SVG table and controls. Online state comes from the server; local saves and undo remain local-only. `components/game/online-room.tsx` owns connection recovery and requests, while `components/lobby/online-lobby.tsx` creates and joins rooms.
 
-Saved data is untrusted and validated, but this is intentionally a local game: a user controls their own device and can edit local outcomes. Nothing here establishes a trusted rating or multiplayer result.
+`lib/multiplayer/transition.ts` checks application actions and calls the same pure engine. `store.ts` persists actions in PostgreSQL transactions using row locks, revision/ply checks and idempotency receipts. The Next room routes verify Supabase anonymous identities. RLS permits only seated reads; browser writes are revoked. Moves are append-only, and completed rounds are archived before rematches. See [the online protocol, setup and test boundaries](multiplayer.md).
 
-## Future phases
+Supabase Realtime reports new committed revisions, followed by an API hydration. Five-second polling recovers missed notifications and updates presence. No WebSocket server or in-process room map is deployed with Next/Vercel. `proxy.ts` supplies per-request script nonces and a restrictive CSP. Pages render dynamically to use those nonces; the configured Supabase HTTP and WebSocket origins are permitted. Styles still allow inline properties for board/progress rendering.
 
-Phase 2 adds Web Worker AI and analysis. Phase 3 adds PostgreSQL/Supabase authentication, migrations, persistence, RLS, and initial realtime transport. A server move transaction must enforce identity, seats, turn, expected ply, canonical engine validity, server clocks, idempotency, and append-only audit moves. Only committed snapshots are broadcast; reconnects hydrate from the server. Database tables and placeholder online routes are intentionally not scaffolded without a current responsibility.
+## Remaining phases
 
-Vercel is the target preview/deployment platform. Public production deployment is a separate approval gate. Repetition/no-progress policy must be agreed and documented before rated play; the current local rules support draw agreement only.
+Phase 2 AI/analysis remains deferred. This request implements only private casual rooms from Phase 3, with anonymous accounts and no clocks, public profiles, chat, or spectators. Future public features require the relevant privacy, moderation and data-model work before exposure. Ratings, repetition/no-progress policies, clocks and abandonment reconciliation remain separate work. Nothing in this increment authorizes a public production deployment.

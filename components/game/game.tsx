@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import Link from "next/link";
 import { Board } from "@/components/board/board";
 import { PieceIcon } from "@/components/board/piece";
@@ -9,6 +9,7 @@ import { applyMove } from "@/lib/game/apply-move";
 import { getLegalMoves, getLegalMovesFrom } from "@/lib/game/legal-moves";
 import { formatMove } from "@/lib/game/notation";
 import { deserializeState, serializeState } from "@/lib/game/serialization";
+import type { OnlineController } from "./online-room";
 import type { GameState, Move, NodeId, Side } from "@/lib/game/types";
 
 type Ending = { winner: Side | "draw"; reason: string };
@@ -23,7 +24,7 @@ const SAVE_KEY = "orcas-sharks.local.v1";
 const SETTINGS_KEY = "orcas-sharks.settings.v1";
 const title = (side: Side) => (side === "orcas" ? "Orcas" : "Sharks");
 
-export function Rules() {
+export function Rules({ online = false }: { online?: boolean }) {
   return (
     <div className="rules-copy">
       <p>Four hunters. Twenty defenders. One ocean.</p>
@@ -46,10 +47,16 @@ export function Rules() {
       </p>
       <h3>Play your way</h3>
       <p>
-        Share this device with a friend. Tap or click to play. With a keyboard,
-        Tab to the board, use arrow keys to navigate, and Enter or Space to
-        select or move. Undo is available to both players. Draws require both
-        players’ agreement; there is no automatic repetition draw.
+        {online
+          ? "Each player controls their own side. "
+          : "Share this device with a friend. "}
+        Tap or click to play. With a keyboard, Tab to the board, use arrow keys
+        to navigate, and Enter or Space to select or move.{" "}
+        {online
+          ? "Online moves cannot be undone. "
+          : "Undo is available to both players. "}
+        Draws require both players’ agreement; there is no automatic repetition
+        draw.
       </p>
       <p className="heritage">
         An original ocean-themed adaptation of Bagh-Chal, the traditional
@@ -59,8 +66,16 @@ export function Rules() {
   );
 }
 
-export default function Game() {
-  const [session, setSession] = useState<Session>(fresh);
+export default function Game({ online }: { online?: OnlineController }) {
+  const [localSession, setSession] = useState<Session>(fresh);
+  const session: Session = online
+    ? {
+        states: [online.room.state],
+        moves: online.room.moves,
+        ending: online.room.ending,
+      }
+    : localSession;
+  const isOnline = !!online;
   const [selected, setSelected] = useState<NodeId | null>(null);
   const [flipped, setFlipped] = useState(false);
   const [ready, setReady] = useState(false);
@@ -73,7 +88,9 @@ export default function Game() {
     "rules" | "settings" | "restart" | "resign" | "draw" | null
   >(null);
   const [announcement, setAnnouncement] = useState(
-    "Sharks move first. Place a Shark on an empty point.",
+    online
+      ? "Online game connected."
+      : "Sharks move first. Place a Shark on an empty point.",
   );
   const [storageMessage, setStorageMessage] = useState("Saved on this device");
   const dialog = useRef<HTMLDialogElement>(null);
@@ -90,16 +107,17 @@ export default function Game() {
               : "All four Orcas immobilized",
         }
       : null);
-  const moves = ending
-    ? []
-    : selected
-      ? getLegalMovesFrom(state, selected)
-      : [];
+  const moves =
+    ending || (online && online.room.side !== state.turn)
+      ? []
+      : selected
+        ? getLegalMovesFrom(state, selected)
+        : [];
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       try {
-        const saved = localStorage.getItem(SAVE_KEY);
+        const saved = isOnline ? null : localStorage.getItem(SAVE_KEY);
         if (saved) {
           const value = JSON.parse(saved);
           if (!Array.isArray(value.moves) || value.moves.length > 10000)
@@ -149,27 +167,28 @@ export default function Game() {
       window.clearTimeout(timer);
       void audio.current?.close();
     };
-  }, []);
+  }, [isOnline]);
 
   useEffect(() => {
     if (!ready) return;
     const timer = window.setTimeout(() => {
       try {
-        localStorage.setItem(
-          SAVE_KEY,
-          JSON.stringify({
-            moves: session.moves,
-            snapshot: serializeState(state),
-            ending: session.ending,
-          }),
-        );
+        if (!isOnline)
+          localStorage.setItem(
+            SAVE_KEY,
+            JSON.stringify({
+              moves: localSession.moves,
+              snapshot: serializeState(state),
+              ending: localSession.ending,
+            }),
+          );
         localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
       } catch {
         setStorageMessage("Storage unavailable · keep this tab open");
       }
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [session, state, settings, ready]);
+  }, [localSession, state, settings, ready, isOnline]);
 
   useEffect(() => {
     if (modal) dialog.current?.showModal();
@@ -203,12 +222,40 @@ export default function Game() {
     }
   }
 
+  const previousOnlinePly = useRef(state.ply);
+  const onlineSound = useEffectEvent(() =>
+    sound(session.moves.at(-1)?.kind === "capture"),
+  );
+  useEffect(() => {
+    if (isOnline && state.ply > previousOnlinePly.current) onlineSound();
+    previousOnlinePly.current = state.ply;
+  }, [isOnline, state.ply]);
+
   function onNode(node: NodeId) {
     if (!ready || ending) return;
+    if (
+      online &&
+      (online.busy ||
+        !online.connected ||
+        online.room.waiting ||
+        online.room.side !== state.turn)
+    ) {
+      setAnnouncement(
+        online.room.waiting
+          ? "Waiting for opponent."
+          : "Wait for your turn and a connection to the server.",
+      );
+      return;
+    }
     const candidate = getLegalMoves(state).find(
       (m) => m.to === node && (m.kind === "place" || m.from === selected),
     );
     if (candidate) {
+      if (online) {
+        void online.send({ kind: "move", move: candidate });
+        setSelected(null);
+        return;
+      }
       const next = applyMove(state, candidate);
       setSession({
         states: [...session.states, next],
@@ -302,10 +349,86 @@ export default function Game() {
           <div className="mode-badge">
             <span>♧</span>
             <div>
-              Local two-player<small>One device. Two minds.</small>
+              {online ? "Online two-player" : "Local two-player"}
+              <small>
+                {online
+                  ? `You are ${title(online.room.side)}`
+                  : "One device. Two minds."}
+              </small>
             </div>
           </div>
         </div>
+        {!online && (
+          <div className="online-entry">
+            <Link href="/online">Play online with a friend ↗</Link>
+          </div>
+        )}
+        {online && (
+          <section className="online-status turn-card" aria-label="Online room">
+            <div>
+              <strong>Room {online.room.code}</strong> · Round{" "}
+              {online.room.round} · You are {title(online.room.side)}
+            </div>
+            <label htmlFor="invite-link">Share this room link</label>
+            <input
+              id="invite-link"
+              readOnly
+              value={
+                typeof window === "undefined"
+                  ? `/game/${online.room.code}`
+                  : `${window.location.origin}/game/${online.room.code}`
+              }
+              onFocus={(event) => event.target.select()}
+            />
+            <p role="status">
+              {!online.connected
+                ? "Connection lost. Reconnecting…"
+                : online.room.waiting
+                  ? "Waiting for opponent"
+                  : ending
+                    ? `Game over. ${ending.winner === "draw" ? "Draw" : title(ending.winner) + " win"}. ${ending.reason}.`
+                    : `${online.room.side === state.turn ? "Your turn" : "Opponent’s turn"}. ${title(state.turn)} to play. ${state.ply ? `Last move: ${formatMove(session.moves.at(-1)!)}` : ""}`}
+              {!online.room.waiting &&
+              online.connected &&
+              !online.room.opponentOnline
+                ? " · Opponent disconnected. Their seat is reserved."
+                : ""}
+            </p>
+            {online.message && <p role="alert">{online.message}</p>}
+            {online.room.drawOffer && (
+              <div>
+                <p>
+                  {online.room.drawOffer === online.room.side
+                    ? "Draw offered. Waiting for your opponent."
+                    : "Your opponent offers a draw."}
+                </p>
+                {online.room.drawOffer !== online.room.side && (
+                  <button
+                    disabled={online.busy}
+                    onClick={() => void online.send({ kind: "accept-draw" })}
+                  >
+                    Accept draw
+                  </button>
+                )}
+                <button
+                  disabled={online.busy}
+                  onClick={() => void online.send({ kind: "decline-draw" })}
+                >
+                  {online.room.drawOffer === online.room.side
+                    ? "Cancel draw offer"
+                    : "Decline draw"}
+                </button>
+              </div>
+            )}
+            {online.room.rematchOffer && (
+              <p>
+                {online.room.rematchOffer === online.room.side
+                  ? "Rematch offered. Waiting for your opponent."
+                  : "Your opponent wants a rematch. Accept to swap sides and play again."}
+              </p>
+            )}
+          </section>
+        )}
         <div className="game-layout">
           <section className="board-column" aria-label="Game table">
             <div
@@ -378,7 +501,11 @@ export default function Game() {
             <div className="board-tools">
               <button
                 onClick={undo}
-                disabled={!ready || (!session.moves.length && !session.ending)}
+                disabled={
+                  !!online ||
+                  !ready ||
+                  (!session.moves.length && !session.ending)
+                }
               >
                 <span>↶</span> Undo
               </button>
@@ -469,28 +596,76 @@ export default function Game() {
               </div>
               <div className="session-status">
                 <span className="status-dot" />{" "}
-                {ready ? storageMessage : "Loading local game…"}
+                {online
+                  ? "Server-authoritative · " +
+                    (online.connected ? "Connected" : "Reconnecting")
+                  : ready
+                    ? storageMessage
+                    : "Loading local game…"}
               </div>
             </section>
             <div className="game-actions">
               <button
+                aria-label={
+                  online
+                    ? online.room.rematchOffer &&
+                      online.room.rematchOffer !== online.room.side
+                      ? "Accept rematch"
+                      : "Rematch"
+                    : ending
+                      ? "Play again"
+                      : "New game"
+                }
                 className="primary-button"
                 onClick={() =>
-                  ending || state.ply === 0 ? reset() : setModal("restart")
+                  online
+                    ? void online.send({ kind: "rematch" })
+                    : ending || state.ply === 0
+                      ? reset()
+                      : setModal("restart")
                 }
-                disabled={!ready}
+                disabled={
+                  !ready ||
+                  (online
+                    ? !ending ||
+                      online.busy ||
+                      !online.connected ||
+                      online.room.rematchOffer === online.room.side
+                    : false)
+                }
               >
-                <span>＋</span> {ending ? "Play again" : "New game"}
+                <span>＋</span>{" "}
+                {online
+                  ? online.room.rematchOffer &&
+                    online.room.rematchOffer !== online.room.side
+                    ? "Accept rematch"
+                    : "Rematch"
+                  : ending
+                    ? "Play again"
+                    : "New game"}
               </button>
               <div>
                 <button
-                  disabled={!!ending || !ready}
+                  disabled={
+                    !!ending ||
+                    !ready ||
+                    (online
+                      ? online.busy || !online.connected || online.room.waiting
+                      : false)
+                  }
                   onClick={() => setModal("draw")}
                 >
-                  ½ <span>Agree draw</span>
+                  ½ <span>{online ? "Offer draw" : "Agree draw"}</span>
                 </button>
                 <button
-                  disabled={!!ending || !ready}
+                  disabled={
+                    !!ending ||
+                    !ready ||
+                    (online
+                      ? online.busy || !online.connected || online.room.waiting
+                      : false)
+                  }
+                  aria-label="Resign"
                   onClick={() => setModal("resign")}
                 >
                   ⚑ <span>Resign</span>
@@ -520,7 +695,9 @@ export default function Game() {
             Inspired by <Link href="/learn">Bagh-Chal</Link>, the traditional
             strategy game of Nepal.
           </p>
-          <span className="local-note">UNRATED · NO CLOCK · LOCAL PLAY</span>
+          <span className="local-note">
+            UNRATED · NO CLOCK · {online ? "ONLINE PLAY" : "LOCAL PLAY"}
+          </span>
         </footer>
       </main>
       <div
@@ -555,7 +732,7 @@ export default function Game() {
           </button>
         </div>
         {modal === "rules" ? (
-          <Rules />
+          <Rules online={isOnline} />
         ) : modal === "settings" ? (
           <div className="settings-content">
             <label>
@@ -604,14 +781,24 @@ export default function Game() {
               {modal === "restart"
                 ? "This replaces the current local game and its move history."
                 : modal === "draw"
-                  ? "Pass the device to your opponent. Both players must agree to end the game as a draw."
-                  : `${title(state.turn)} will resign. ${title(state.turn === "sharks" ? "orcas" : "sharks")} will win.`}
+                  ? online
+                    ? "Send a draw offer to your opponent. They must accept it to end the game."
+                    : "Pass the device to your opponent. Both players must agree to end the game as a draw."
+                  : `${title(online?.room.side ?? state.turn)} will resign. ${title((online?.room.side ?? state.turn) === "sharks" ? "orcas" : "sharks")} will win.`}
             </p>
             <div className="dialog-actions">
               <button onClick={() => setModal(null)}>Keep playing</button>
               <button
                 className="primary-button"
                 onClick={() => {
+                  if (online) {
+                    void online.send({
+                      kind: modal === "draw" ? "offer-draw" : "resign",
+                    });
+                    setModal(null);
+                    setSelected(null);
+                    return;
+                  }
                   if (modal === "restart") reset();
                   else {
                     const result: Ending =
@@ -636,7 +823,9 @@ export default function Game() {
                 {modal === "restart"
                   ? "Start new game"
                   : modal === "draw"
-                    ? "Opponent: accept draw"
+                    ? online
+                      ? "Send draw offer"
+                      : "Opponent: accept draw"
                     : "Confirm resignation"}
               </button>
             </div>

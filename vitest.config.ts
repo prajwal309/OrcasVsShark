@@ -5,7 +5,11 @@ export default defineConfig({
   plugins: [react()],
   resolve: { alias: { "@": fileURLToPath(new URL(".", import.meta.url)) } },
   test: {
-    include: ["tests/engine/**/*.test.ts", "tests/components/**/*.test.tsx"],
+    include: [
+      "tests/engine/**/*.test.ts",
+      "tests/components/**/*.test.tsx",
+      "tests/multiplayer/**/*.test.ts",
+    ],
     environment: "jsdom",
     setupFiles: ["./tests/setup.ts"],
   },

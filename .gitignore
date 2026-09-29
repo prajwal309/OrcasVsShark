@@ -9,7 +9,7 @@ node_modules/
 !.yarn/plugins
 !.yarn/releases
 !.yarn/versions
-
+Instructions.md
 # Test output and browser authentication state
 /coverage/
 /playwright-report/
@@ -20,6 +20,7 @@ node_modules/
 
 # next.js
 /.next/
+/.next-online/
 /out/
 
 # Build output and tool caches

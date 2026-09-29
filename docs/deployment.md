@@ -12,3 +12,7 @@ The local workspace initially had no Git repository, remote, Vercel project, or 
 Before production, review accessibility with assistive technology and real devices, select a product license, complete required legal/privacy pages, configure error monitoring without personal data, domain/HTTPS, and operational ownership. There is no analytics collector in this phase.
 
 Rollback: retain the last verified immutable Vercel deployment and promote it through Vercel’s rollback flow after checking its health. There are no Phase 1 migrations or server player data to roll back. Do not silently change the local-save schema: version changes require explicit compatibility or a user-visible recovery path. Local saves are browser conveniences, not backed-up cloud archives.
+
+## Online preview
+
+For private casual online rooms, follow [multiplayer setup](multiplayer.md) using a separate development Supabase project. Apply the additive room migration before deploying the app and set all three environment variables before the preview build. Verify both browsers against real Supabase Auth/Realtime; the automated fixture suite does not replace that check. Database migration and production promotion have not been performed. Retain backups and roll back application code without dropping the audit tables.

@@ -943,3 +943,52 @@ dialog > p,
     display: none;
   }
 }
+/* Online controls reuse the local table's surfaces and design tokens. */
+.online-lobby {
+  max-width: 680px;
+  display: grid;
+  gap: 24px;
+}
+.online-lobby form {
+  display: grid;
+  gap: 12px;
+  margin-top: 24px;
+}
+.online-lobby input,
+.online-status input {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--surface);
+  color: inherit;
+}
+.online-status {
+  margin-bottom: 24px;
+  overflow-wrap: anywhere;
+}
+.online-status label {
+  display: block;
+  margin-block: 12px 6px;
+}
+.online-status button,
+.online-retry button,
+.online-lobby button {
+  min-height: 44px;
+  padding: 10px 16px;
+}
+.online-retry {
+  padding: 16px;
+  background: #163842;
+  color: #f0faf7;
+}
+
+.online-entry a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-bottom: 16px;
+  color: var(--accent);
+}
