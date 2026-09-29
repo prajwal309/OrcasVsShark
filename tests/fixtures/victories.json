@@ -1,0 +1,486 @@
+{
+  "orcas": [
+    {
+      "kind": "place",
+      "to": "c3"
+    },
+    {
+      "kind": "step",
+      "from": "a5",
+      "to": "a4"
+    },
+    {
+      "kind": "place",
+      "to": "d2"
+    },
+    {
+      "kind": "step",
+      "from": "a4",
+      "to": "a5"
+    },
+    {
+      "kind": "place",
+      "to": "e3"
+    },
+    {
+      "kind": "step",
+      "from": "a1",
+      "to": "b2"
+    },
+    {
+      "kind": "place",
+      "to": "a3"
+    },
+    {
+      "kind": "step",
+      "from": "b2",
+      "to": "a2"
+    },
+    {
+      "kind": "place",
+      "to": "e2"
+    },
+    {
+      "kind": "step",
+      "from": "a5",
+      "to": "b4"
+    },
+    {
+      "kind": "place",
+      "to": "d3"
+    },
+    {
+      "kind": "step",
+      "from": "b4",
+      "to": "b3"
+    },
+    {
+      "kind": "place",
+      "to": "e4"
+    },
+    {
+      "kind": "step",
+      "from": "b3",
+      "to": "b4"
+    },
+    {
+      "kind": "place",
+      "to": "c5"
+    },
+    {
+      "kind": "step",
+      "from": "a2",
+      "to": "b2"
+    },
+    {
+      "kind": "place",
+      "to": "c4"
+    },
+    {
+      "kind": "step",
+      "from": "b2",
+      "to": "b3"
+    },
+    {
+      "kind": "place",
+      "to": "a4"
+    },
+    {
+      "kind": "step",
+      "from": "e5",
+      "to": "d5"
+    },
+    {
+      "kind": "place",
+      "to": "d4"
+    },
+    {
+      "kind": "capture",
+      "from": "d5",
+      "over": "c5",
+      "to": "b5"
+    },
+    {
+      "kind": "place",
+      "to": "d1"
+    },
+    {
+      "kind": "step",
+      "from": "b5",
+      "to": "a5"
+    },
+    {
+      "kind": "place",
+      "to": "d5"
+    },
+    {
+      "kind": "step",
+      "from": "b3",
+      "to": "b2"
+    },
+    {
+      "kind": "place",
+      "to": "a1"
+    },
+    {
+      "kind": "step",
+      "from": "b2",
+      "to": "a2"
+    },
+    {
+      "kind": "place",
+      "to": "c2"
+    },
+    {
+      "kind": "step",
+      "from": "b4",
+      "to": "b3"
+    },
+    {
+      "kind": "place",
+      "to": "e5"
+    },
+    {
+      "kind": "step",
+      "from": "b3",
+      "to": "b2"
+    },
+    {
+      "kind": "place",
+      "to": "b4"
+    },
+    {
+      "kind": "step",
+      "from": "b2",
+      "to": "b3"
+    },
+    {
+      "kind": "place",
+      "to": "b2"
+    },
+    {
+      "kind": "capture",
+      "from": "e1",
+      "over": "d1",
+      "to": "c1"
+    },
+    {
+      "kind": "place",
+      "to": "b5"
+    },
+    {
+      "kind": "step",
+      "from": "c1",
+      "to": "b1"
+    },
+    {
+      "kind": "place",
+      "to": "e1"
+    },
+    {
+      "kind": "capture",
+      "from": "a5",
+      "over": "b5",
+      "to": "c5"
+    },
+    {
+      "kind": "step",
+      "from": "a4",
+      "to": "a5"
+    },
+    {
+      "kind": "capture",
+      "from": "a2",
+      "over": "a3",
+      "to": "a4"
+    },
+    {
+      "kind": "step",
+      "from": "d2",
+      "to": "d1"
+    },
+    {
+      "kind": "step",
+      "from": "c5",
+      "to": "b5"
+    },
+    {
+      "kind": "step",
+      "from": "c3",
+      "to": "d2"
+    },
+    {
+      "kind": "step",
+      "from": "b3",
+      "to": "c3"
+    },
+    {
+      "kind": "step",
+      "from": "b2",
+      "to": "a3"
+    },
+    {
+      "kind": "step",
+      "from": "b5",
+      "to": "c5"
+    },
+    {
+      "kind": "step",
+      "from": "a1",
+      "to": "a2"
+    },
+    {
+      "kind": "step",
+      "from": "b1",
+      "to": "b2"
+    },
+    {
+      "kind": "step",
+      "from": "b4",
+      "to": "b3"
+    },
+    {
+      "kind": "step",
+      "from": "a4",
+      "to": "b4"
+    },
+    {
+      "kind": "step",
+      "from": "a5",
+      "to": "a4"
+    },
+    {
+      "kind": "step",
+      "from": "b4",
+      "to": "b5"
+    },
+    {
+      "kind": "step",
+      "from": "a3",
+      "to": "b4"
+    },
+    {
+      "kind": "step",
+      "from": "b2",
+      "to": "b1"
+    },
+    {
+      "kind": "step",
+      "from": "b4",
+      "to": "a5"
+    },
+    {
+      "kind": "step",
+      "from": "b1",
+      "to": "c1"
+    },
+    {
+      "kind": "step",
+      "from": "b3",
+      "to": "b2"
+    },
+    {
+      "kind": "step",
+      "from": "c1",
+      "to": "b1"
+    },
+    {
+      "kind": "step",
+      "from": "a2",
+      "to": "a1"
+    },
+    {
+      "kind": "capture",
+      "from": "b1",
+      "over": "b2",
+      "to": "b3"
+    }
+  ],
+  "sharks": [
+    {
+      "kind": "place",
+      "to": "c1"
+    },
+    {
+      "kind": "step",
+      "from": "a1",
+      "to": "b2"
+    },
+    {
+      "kind": "place",
+      "to": "a3"
+    },
+    {
+      "kind": "step",
+      "from": "b2",
+      "to": "a2"
+    },
+    {
+      "kind": "place",
+      "to": "a4"
+    },
+    {
+      "kind": "step",
+      "from": "a5",
+      "to": "b5"
+    },
+    {
+      "kind": "place",
+      "to": "a5"
+    },
+    {
+      "kind": "step",
+      "from": "b5",
+      "to": "b4"
+    },
+    {
+      "kind": "place",
+      "to": "d1"
+    },
+    {
+      "kind": "step",
+      "from": "b4",
+      "to": "c5"
+    },
+    {
+      "kind": "place",
+      "to": "d5"
+    },
+    {
+      "kind": "step",
+      "from": "e5",
+      "to": "d4"
+    },
+    {
+      "kind": "place",
+      "to": "e5"
+    },
+    {
+      "kind": "step",
+      "from": "d4",
+      "to": "d3"
+    },
+    {
+      "kind": "place",
+      "to": "b4"
+    },
+    {
+      "kind": "step",
+      "from": "a2",
+      "to": "b2"
+    },
+    {
+      "kind": "place",
+      "to": "b3"
+    },
+    {
+      "kind": "step",
+      "from": "e1",
+      "to": "e2"
+    },
+    {
+      "kind": "place",
+      "to": "a2"
+    },
+    {
+      "kind": "step",
+      "from": "e2",
+      "to": "e3"
+    },
+    {
+      "kind": "place",
+      "to": "d2"
+    },
+    {
+      "kind": "step",
+      "from": "d3",
+      "to": "d4"
+    },
+    {
+      "kind": "place",
+      "to": "e4"
+    },
+    {
+      "kind": "step",
+      "from": "d4",
+      "to": "c4"
+    },
+    {
+      "kind": "place",
+      "to": "d4"
+    },
+    {
+      "kind": "step",
+      "from": "e3",
+      "to": "e2"
+    },
+    {
+      "kind": "place",
+      "to": "c2"
+    },
+    {
+      "kind": "step",
+      "from": "b2",
+      "to": "b1"
+    },
+    {
+      "kind": "place",
+      "to": "e3"
+    },
+    {
+      "kind": "step",
+      "from": "c4",
+      "to": "c3"
+    },
+    {
+      "kind": "place",
+      "to": "e1"
+    },
+    {
+      "kind": "step",
+      "from": "c5",
+      "to": "c4"
+    },
+    {
+      "kind": "place",
+      "to": "d3"
+    },
+    {
+      "kind": "step",
+      "from": "c3",
+      "to": "b2"
+    },
+    {
+      "kind": "place",
+      "to": "c3"
+    },
+    {
+      "kind": "step",
+      "from": "b2",
+      "to": "a1"
+    },
+    {
+      "kind": "place",
+      "to": "b2"
+    },
+    {
+      "kind": "step",
+      "from": "c4",
+      "to": "c5"
+    },
+    {
+      "kind": "place",
+      "to": "c4"
+    },
+    {
+      "kind": "step",
+      "from": "c5",
+      "to": "b5"
+    },
+    {
+      "kind": "step",
+      "from": "d4",
+      "to": "c5"
+    }
+  ]
+}
