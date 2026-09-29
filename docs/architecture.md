@@ -4,6 +4,8 @@
 
 Next.js App Router, React, strict TypeScript, Tailwind CSS with custom-property design tokens, and an interactive SVG board. Vitest and React Testing Library verify the engine and board; Playwright verifies complete local games on desktop and mobile. System fonts avoid font downloads and third-party requests.
 
+The root layout suppresses hydration warnings only on `body`, where browser extensions such as Grammarly inject attributes before React loads. Descendant hydration checks remain enabled. Regression tests exercise extension attributes during hydration and verify that play and refresh recovery still work.
+
 `lib/game/graph.ts` declares 16 continuous straight lines: five rows, five columns, two full diagonals, and four shorter diagonals. Consecutive pairs expand to 56 undirected edges; consecutive triples in both directions expand to 80 capture paths. This is an explicit topology, not pixel-derived connectivity. A separate coordinate map serves rendering only. Tests compare every pair and every triple to an independent geometric oracle.
 
 The pure engine modules own legal moves, application, victory detection, position keys, notation, and versioned serialization. Immutable application copies the board and history. The UI selects a legal move returned by the engine; it never calculates movement rules itself. Serialization uses an explicit Zod schema plus cross-field invariants. External moves are checked by the canonical legal-move list.

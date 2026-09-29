@@ -35,6 +35,8 @@ npm start
 
 Playwright starts the production server automatically and exercises desktop and narrow mobile layouts. Tests include complete games ending in each board victory, refresh recovery, keyboard play, undo/restart, settings, draw agreement, and resignation. CI installs Chromium and runs the checks on a clean checkout.
 
+To verify while a development server is running, build with `BUILD_OUTPUT_DIR=.next/hydration-verification npm run build`, then run `BUILD_OUTPUT_DIR=.next/hydration-verification PLAYWRIGHT_BASE_URL=http://127.0.0.1:3100 npm run test:e2e`. This keeps the test server and build separate from development.
+
 `npm run build` and `npm run dev` use Next.js’s supported Webpack compiler because Turbopack’s internal CSS subprocess port binding fails in the development sandbox. This does not change the Next.js/React/Tailwind application architecture.
 
 ## Architecture and rules
