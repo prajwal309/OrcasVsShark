@@ -139,6 +139,37 @@ test("two browsers synchronize, enforce seats, recover refresh/offline, draw and
   await other.close();
 });
 
+test("online players can use different visual themes for the same canonical game", async ({
+  page,
+  browser,
+}) => {
+  const other = await browser.newContext();
+  const guest = await other.newPage();
+  try {
+    const code = await openMatch(page, guest);
+    await page.getByRole("button", { name: "Open settings" }).click();
+    await page.getByLabel("Board theme").selectOption("tigers-goats");
+    await page.getByRole("button", { name: "Close dialog" }).click();
+    await expect(node(page, "a1")).toHaveAttribute("aria-label", "a1, tiger");
+    await expect(node(guest, "a1")).toHaveAttribute("aria-label", "a1, orca");
+    await node(guest, "c3").click();
+    await expect(node(page, "c3")).toHaveAttribute("aria-label", "c3, goat");
+    await node(page, "a1").click();
+    await node(page, "a2").click();
+    await expect(node(guest, "a2")).toHaveAttribute("aria-label", "a2, orca");
+    await page.reload();
+    await expect(node(page, "a2")).toHaveAttribute("aria-label", "a2, tiger");
+    await expect(
+      page.getByRole("region", { name: "Online room" }),
+    ).toContainText("You are Tigers");
+    expect((await api(page, code)).data.state).toEqual(
+      (await api(guest, code)).data.state,
+    );
+  } finally {
+    await other.close();
+  }
+});
+
 for (const winner of ["orcas", "sharks"] as const)
   test(`complete ${winner} victory is visible and durable for both browsers`, async ({
     page,
@@ -174,6 +205,22 @@ for (const winner of ["orcas", "sharks"] as const)
     expect((await api(page, code)).data.state).toEqual(
       (await api(guest, code)).data.state,
     );
+    await page.getByRole("button", { name: "Rematch", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "Rematch", exact: true }),
+    ).toBeDisabled();
+    await guest
+      .getByRole("button", { name: "Accept rematch", exact: true })
+      .click();
+    await expect(
+      page.getByRole("heading", { name: "Sharks to play" }),
+    ).toBeVisible();
+    await expect(
+      guest.getByRole("heading", { name: "Sharks to play" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("region", { name: "Online room" }),
+    ).toContainText("You are Sharks");
     await other.close();
   });
 

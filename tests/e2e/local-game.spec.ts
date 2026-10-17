@@ -99,13 +99,22 @@ for (const side of ["orcas", "sharks"] as const)
         { exact: true },
       ),
     ).toBeVisible();
+    const celebration = page.getByRole("region", {
+      name: side === "orcas" ? "Orcas win!" : "Sharks win!",
+    });
+    await expect(celebration).toBeVisible();
+    await celebration.getByRole("button", { name: "View board" }).click();
+    await expect(celebration).toHaveClass(/is-compact/);
+    await expect(
+      celebration.getByRole("button", { name: "Play again", exact: true }),
+    ).toBeEnabled();
     await page.reload();
     await expect(
       page.getByRole("heading", {
         name: side === "orcas" ? "Orcas win!" : "Sharks win!",
       }),
     ).toBeVisible();
-    await page.getByRole("button", { name: "Play again" }).click();
+    await page.getByRole("button", { name: "Play again", exact: true }).click();
     await expect(
       page.getByRole("heading", { name: "Sharks to play" }),
     ).toBeVisible();
@@ -125,7 +134,7 @@ test("agreement and resignation are separate application results", async ({
   await expect(
     page.getByRole("heading", { name: "A shared tide." }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Play again" }).click();
+  await page.getByRole("button", { name: "Play again", exact: true }).click();
   await page.getByRole("button", { name: "Resign", exact: true }).click();
   await page.getByRole("button", { name: "Confirm resignation" }).click();
   await expect(page.getByRole("heading", { name: "Orcas win!" })).toBeVisible();

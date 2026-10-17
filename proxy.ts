@@ -13,6 +13,7 @@ export function proxy(request: NextRequest) {
     "font-src 'self'",
     `connect-src 'self' ${origin} ${origin.replace(/^http/, "ws")}${dev ? " ws: wss:" : ""}`,
     "media-src 'self' blob:",
+    "worker-src 'self'",
     "object-src 'none'",
     "base-uri 'self'",
     "frame-ancestors 'none'",

@@ -4,9 +4,17 @@ An original, ocean-themed adaptation of Bagh-Chal, the traditional asymmetric st
 
 ## Current scope
 
-Phase 1: two players sharing a device. Play immediately at `/` or `/play`. Includes an interactive SVG board, both victory conditions, keyboard play, legal destinations and capture paths, undo, move history, restart/rematch, board flip, rules, sound, two themes, motion preferences, draw agreement, resignation, and local refresh recovery.
+Phase 1: two players sharing a device. Play immediately at `/` or `/play`. Includes an interactive SVG board, both victory conditions, keyboard play, legal destinations and capture paths, undo, move history, restart/rematch, board flip, rules, sound, three themes, motion preferences, draw agreement, resignation, and local refresh recovery.
 
-Private casual online rooms are available at `/online` when Supabase is configured. Create an invite, join from another browser, and play with server-authoritative moves, reconnects, draw offers, resignation and mutually accepted rematches. See [multiplayer setup](docs/multiplayer.md). AI, analysis, named accounts, clocks and rated play remain future work.
+Choose **Settings → Board theme → Tigers & Goats** for original Tiger and Goat pieces on a forest table. Names, rules and announcements follow the theme. Deep ocean and Sand table remain available. Theme choices are saved on this device and can be changed during local, computer or online games without restarting.
+
+Moves include piece glides and capture leaps, arrival ripples, capture fades, and brief selection, turn and victory feedback. Animations never delay a move or block controls. Turn them off in **Settings → Animations**; the browser's reduced-motion preference always takes precedence.
+
+A victory card announces the winning side with a short celebration. **Play again** starts a fresh local or computer game with the same computer settings. **View board** collapses the card to inspect the final position. Online games offer **Rematch**, requiring both players to agree before a new round begins.
+
+Computer play is available at `/` and `/play`: choose **Play against computer**, your side and difficulty, then **Start game**. Play either Orcas or Sharks at Easy, Medium or Hard difficulty. Search runs in a Web Worker, and games resume on refresh. Undo takes back your last move and the computer's reply. See [computer play](docs/computer.md).
+
+Private casual online rooms are available at `/online` when Supabase is configured. Create an invite, join from another browser, and play with server-authoritative moves, reconnects, draw offers, resignation and mutually accepted rematches. See [multiplayer setup](docs/multiplayer.md). Analysis, named accounts, clocks and rated play remain future work.
 
 ## Run
 
@@ -17,7 +25,32 @@ npm ci
 npm run dev
 ```
 
+On Windows PowerShell, if `npm` fails because `npm.ps1` is blocked by the execution policy, use the installed `.cmd` launcher:
+
+```powershell
+npm.cmd ci
+npm.cmd run dev
+```
+
+This requires no execution-policy change. Use `npm.cmd` in place of `npm` and `npx.cmd` in place of `npx` for the verification commands below as well.
+
 Open http://localhost:3000. Local play needs no credentials. Online play requires the three values in `.env.example`, anonymous Supabase sign-in, and the room migration. See [multiplayer setup](docs/multiplayer.md).
+
+## Commit and push from Windows
+
+With Git for Windows installed, run this from Git Bash:
+
+```sh
+bash ./commit2GitWindows.sh "Describe your changes"
+```
+
+Or from PowerShell, using the default Git for Windows installation path:
+
+```powershell
+& "C:\Program Files\Git\bin\bash.exe" ./commit2GitWindows.sh "Describe your changes"
+```
+
+The script stages all non-ignored changes, commits them, fetches and rebases onto remote `main` when present, then pushes to GitHub. It stops on errors or conflicts and requires the current branch to be `main`. Configure your Git identity and GitHub authentication before running it. Omitting the message uses `Update Orcas vs Sharks game`.
 
 ## Verify
 

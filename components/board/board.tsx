@@ -1,8 +1,11 @@
 "use client";
-import { useRef } from "react";
+import { useRef, useState, type CSSProperties } from "react";
 import { COORDINATES, EDGES, NODES } from "@/lib/game/graph";
 import type { GameState, Move, NodeId } from "@/lib/game/types";
-import { Piece } from "./piece";
+import { ThemedPiece as Piece } from "./themed-piece";
+import { CapeCodBackground } from "./cape-cod-background";
+import { ForestBackground } from "./forest-background";
+import { themeLabels, type BoardTheme } from "@/lib/presentation/board-themes";
 
 export function Board({
   state,
@@ -11,6 +14,9 @@ export function Board({
   lastMove,
   flipped,
   onNode,
+  theme = "ocean",
+  motionEnabled = true,
+  finished = false,
 }: {
   state: GameState;
   selected: NodeId | null;
@@ -18,8 +24,56 @@ export function Board({
   lastMove?: Move;
   flipped: boolean;
   onNode: (node: NodeId) => void;
+  theme?: BoardTheme;
+  motionEnabled?: boolean;
+  finished?: boolean;
 }) {
   const refs = useRef<Partial<Record<NodeId, SVGGElement | null>>>({});
+  const [frame, setFrame] = useState<{
+    position: GameState;
+    flipped: boolean;
+    theme: BoardTheme;
+    enabled: boolean;
+    sequence: number;
+    effect: { id: number; move: Move } | null;
+  }>({
+    position: state,
+    flipped,
+    theme,
+    enabled: motionEnabled,
+    sequence: 0,
+    effect: null,
+  });
+  if (
+    frame.position !== state ||
+    frame.flipped !== flipped ||
+    frame.theme !== theme ||
+    frame.enabled !== motionEnabled
+  ) {
+    // Animate only a newly committed, consecutive move, never hydration, undo,
+    // reconnect catch-up, or a change to the board's orientation or theme.
+    const consecutive =
+      motionEnabled &&
+      frame.enabled &&
+      frame.flipped === flipped &&
+      frame.theme === theme &&
+      state.ply === frame.position.ply + 1 &&
+      state.history.at(-2) === frame.position.history.at(-1);
+    const sequence = frame.sequence + 1;
+    setFrame({
+      position: state,
+      flipped,
+      theme,
+      enabled: motionEnabled,
+      sequence,
+      effect: consecutive && lastMove ? { id: sequence, move: lastMove } : null,
+    });
+  }
+  const effect = frame.effect;
+  const clearEffect = (id: number) =>
+    setFrame((current) =>
+      current.effect?.id === id ? { ...current, effect: null } : current,
+    );
   const point = (node: NodeId) => {
     const { x, y } = COORDINATES[node];
     return {
@@ -30,7 +84,7 @@ export function Board({
   const captures = moves.filter((m) => m.kind === "capture");
   return (
     <svg
-      className="game-board"
+      className={`game-board${finished || state.result ? " is-finished" : ""}`}
       viewBox="0 0 520 520"
       aria-label="Bagh-Chal game board. Use arrow keys to navigate, Enter or Space to play."
       role="group"
@@ -49,6 +103,7 @@ export function Board({
           <stop offset="1" stopColor="#092a35" stopOpacity="0" />
         </radialGradient>
       </defs>
+      {theme === "tigers-goats" ? <ForestBackground /> : <CapeCodBackground />}
       <rect
         x="18"
         y="18"
@@ -88,6 +143,44 @@ export function Board({
             />
           ),
       )}
+      {effect && (
+        <g
+          key={effect.id}
+          className="move-effects"
+          aria-hidden="true"
+          pointerEvents="none"
+        >
+          {effect.move.kind !== "place" && (
+            <line
+              className="move-trail"
+              x1={point(effect.move.from).x}
+              y1={point(effect.move.from).y}
+              x2={point(effect.move.to).x}
+              y2={point(effect.move.to).y}
+            />
+          )}
+          <g
+            transform={`translate(${point(effect.move.to).x} ${point(effect.move.to).y})`}
+          >
+            <circle r="27" className="arrival-ripple" />
+            <circle
+              r="27"
+              className="arrival-ripple ripple-echo"
+              onAnimationEnd={() => clearEffect(effect.id)}
+            />
+          </g>
+          {effect.move.kind === "capture" && (
+            <g
+              transform={`translate(${point(effect.move.over).x} ${point(effect.move.over).y})`}
+            >
+              <g className="captured-piece">
+                <Piece kind="shark" theme={theme} />
+              </g>
+              <circle r="18" className="capture-burst" />
+            </g>
+          )}
+        </g>
+      )}
       {[0, 1, 2, 3, 4].map((i) => (
         <g key={i} className="coordinates">
           <text x={60 + i * 100} y="507" textAnchor="middle">
@@ -98,6 +191,38 @@ export function Board({
           </text>
         </g>
       ))}
+      <g className="board-pieces" aria-hidden="true" pointerEvents="none">
+        {NODES.map((node) => {
+          const piece = state.board[node];
+          if (!piece) return null;
+          const p = point(node);
+          const arriving = effect?.move.to === node ? effect : null;
+          const origin =
+            arriving && arriving.move.kind !== "place"
+              ? point(arriving.move.from)
+              : p;
+          return (
+            <g key={node} transform={`translate(${p.x} ${p.y})`}>
+              <g
+                key={arriving?.id ?? "still"}
+                className={
+                  arriving
+                    ? `piece-arrival piece-${arriving.move.kind}`
+                    : "board-piece"
+                }
+                style={
+                  {
+                    "--from-x": `${origin.x - p.x}px`,
+                    "--from-y": `${origin.y - p.y}px`,
+                  } as CSSProperties
+                }
+              >
+                <Piece kind={piece} theme={theme} />
+              </g>
+            </g>
+          );
+        })}
+      </g>
       {NODES.map((node) => {
         const p = point(node),
           piece = state.board[node],
@@ -115,7 +240,7 @@ export function Board({
             }}
             role="button"
             tabIndex={0}
-            aria-label={`${node}, ${piece ?? "empty"}${legal ? ", legal destination" : ""}`}
+            aria-label={`${node}, ${piece ? themeLabels(theme).pieces[piece] : "empty"}${legal ? ", legal destination" : ""}`}
             aria-pressed={active}
             className={`board-node ${active ? "selected" : ""}`}
             transform={`translate(${p.x} ${p.y})`}
@@ -155,7 +280,7 @@ export function Board({
                 className="last-move"
               />
             )}
-            <circle r="3.5" className="intersection" />
+            {!piece && <circle r="3.5" className="intersection" />}
             {active && (
               <circle
                 r="31"
@@ -163,6 +288,7 @@ export function Board({
                 stroke="var(--accent)"
                 strokeWidth="2.5"
                 strokeDasharray="5 4"
+                className="selection-ring"
               />
             )}
             {legal && !piece && (
@@ -171,10 +297,21 @@ export function Board({
                 <circle r="5" fill="var(--accent)" />
               </>
             )}
-            {piece && <Piece kind={piece} />}
           </g>
         );
       })}
+      {(finished || state.result) && (
+        <rect
+          className="result-glow"
+          x="22"
+          y="22"
+          width="476"
+          height="476"
+          rx="18"
+          aria-hidden="true"
+          pointerEvents="none"
+        />
+      )}
     </svg>
   );
 }
