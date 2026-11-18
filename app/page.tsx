@@ -1,4 +1,6 @@
-import Game from "@/components/game/game";
+import { googleConfiguration } from "@/lib/auth/google";
+import { OnlineLobby } from "@/components/lobby/online-lobby";
+
 export default function Home() {
-  return <Game />;
+  return <OnlineLobby googleEnabled={!!googleConfiguration()} />;
 }

@@ -2,7 +2,9 @@
 import { beforeAll, afterAll, describe, expect, it } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
 import { readFileSync } from "node:fs";
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
+import { acknowledgeMatch, updateQueue } from "@/lib/multiplayer/matchmaking";
+import { createAccount, googleAccount } from "@/lib/auth/accounts";
 import type { SqlClient } from "@/lib/database/connection";
 import {
   createRoom,
@@ -24,8 +26,9 @@ const host = randomUUID(),
   guest = randomUUID(),
   stranger = randomUUID();
 async function tx<T>(work: (db: SqlClient) => Promise<T>) {
-  return database.transaction(async (client) =>
-    work({
+  return database.transaction(async (client) => {
+    await client.exec("SET LOCAL ROLE orcas_app");
+    return work({
       async query<T>(sql: string, values?: unknown[]) {
         const result = await client.query(sql, values);
         return {
@@ -33,8 +36,8 @@ async function tx<T>(work: (db: SqlClient) => Promise<T>) {
           rowCount: result.affectedRows ?? result.rows.length,
         };
       },
-    }),
-  );
+    });
+  });
 }
 const request = (room: RoomView, action: RoomAction): RoomRequest => ({
   requestId: randomUUID(),
@@ -49,15 +52,22 @@ async function joined() {
   );
 }
 beforeAll(async () => {
-  await database.exec(`CREATE ROLE anon; CREATE ROLE authenticated; CREATE SCHEMA auth;
-    CREATE TABLE auth.users (id uuid PRIMARY KEY);
-    CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql AS $$ SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
-    CREATE PUBLICATION supabase_realtime;`);
+  await database.exec("CREATE ROLE unprivileged; CREATE ROLE orcas_app");
   await database.exec(
-    readFileSync("supabase/migrations/202609280001_online_rooms.sql", "utf8"),
+    readFileSync("database/migrations/001_multiplayer.sql", "utf8"),
   );
-  for (const actor of [host, guest, stranger])
-    await database.query("INSERT INTO auth.users VALUES ($1)", [actor]);
+  await database.exec(readFileSync("database/grant-local-app.sql", "utf8"));
+  await database.exec(
+    readFileSync("database/migrations/002_matchmaking.sql", "utf8"),
+  );
+  await database.exec(
+    readFileSync("database/migrations/003_google_accounts.sql", "utf8"),
+  );
+  for (const [index, actor] of [host, guest, stranger].entries())
+    await database.query(
+      "INSERT INTO accounts (id, username, password_hash) VALUES ($1, $2, 'fixture')",
+      [actor, `player_${index}`],
+    );
 }, 30000);
 afterAll(async () => {
   await database.close();
@@ -300,34 +310,18 @@ describe("authoritative PostgreSQL room operations", () => {
     expect(room.ending).toEqual({ winner: "sharks", reason: "Resignation" });
   });
 
-  it("enforces RLS for nonparticipants and denies all direct browser writes", async () => {
-    const room = await joined();
-    await database.transaction(async (db) => {
-      await db.exec("SET LOCAL ROLE authenticated");
-      await db.query("SELECT set_config('request.jwt.claim.sub', $1, true)", [
-        stranger,
-      ]);
-      expect(
-        (await db.query("SELECT * FROM games WHERE code=$1", [room.code])).rows,
-      ).toHaveLength(0);
-      await db.query("SELECT set_config('request.jwt.claim.sub', $1, true)", [
-        host,
-      ]);
-      expect(
-        (await db.query("SELECT * FROM games WHERE code=$1", [room.code])).rows,
-      ).toHaveLength(1);
-    });
-    await expect(
-      database.transaction(async (db) => {
-        await db.exec("SET LOCAL ROLE authenticated");
-        await db.query("SELECT set_config('request.jwt.claim.sub', $1, true)", [
-          host,
-        ]);
-        await db.query("UPDATE games SET current_ply=999 WHERE code=$1", [
-          room.code,
-        ]);
-      }),
-    ).rejects.toThrow("permission denied");
+  it("denies direct reads and writes from an unprivileged database role", async () => {
+    for (const command of [
+      "SELECT * FROM games",
+      "UPDATE games SET current_ply=999",
+      "SELECT * FROM account_sessions",
+    ])
+      await expect(
+        database.transaction(async (db) => {
+          await db.exec("SET LOCAL ROLE unprivileged");
+          await db.exec(command);
+        }),
+      ).rejects.toThrow("permission denied");
   });
 
   it("reports disconnected opponents and restores presence without changing the game", async () => {
@@ -351,4 +345,85 @@ describe("authoritative PostgreSQL room operations", () => {
       tx((db) => rateLimit(db, host, "test", 1)),
     ).rejects.toMatchObject({ status: 429 });
   });
+});
+
+it("expires inactive queue entries and reuses one durable match for repeated requests", async () => {
+  expect(await tx((db) => updateQueue(db, host, "enter"))).toEqual({
+    status: "waiting",
+  });
+  await database.query(
+    "UPDATE matchmaking_queue SET expires_at = now() - interval '1 second' WHERE account_id = $1",
+    [host],
+  );
+  expect(await tx((db) => updateQueue(db, guest, "enter"))).toEqual({
+    status: "waiting",
+  });
+  expect(await tx((db) => updateQueue(db, guest, "status"))).toEqual({
+    status: "waiting",
+  });
+  const match = await tx((db) => updateQueue(db, stranger, "enter"));
+  expect(match.status).toBe("matched");
+  if (match.status !== "matched") return;
+  expect(await tx((db) => updateQueue(db, guest, "cancel"))).toEqual(match);
+  expect(await tx((db) => updateQueue(db, stranger, "enter"))).toEqual(match);
+  const guestRoom = await tx((db) => readRoom(db, match.code, guest));
+  expect(guestRoom.waiting).toBe(false);
+  expect(guestRoom.side).toBe("orcas");
+  expect((await tx((db) => readRoom(db, match.code, stranger))).side).toBe(
+    "sharks",
+  );
+  await tx((db) => acknowledgeMatch(db, guest, match.code));
+  expect(await tx((db) => updateQueue(db, guest, "status"))).toEqual({
+    status: "idle",
+  });
+  expect(await tx((db) => updateQueue(db, stranger, "status"))).toEqual(match);
+});
+
+it("requires an invitation for the first Google sign-in and never links by username", async () => {
+  const subject = "google-test-subject";
+  const invitationHash = randomBytes(32).toString("hex");
+  await database.query(
+    "INSERT INTO account_invites VALUES ($1, now() + interval '1 hour', NULL)",
+    [invitationHash],
+  );
+  await expect(tx((db) => googleAccount(db, subject))).rejects.toMatchObject({
+    code: "GOOGLE_SIGNUP_REQUIRED",
+  });
+  await expect(
+    tx((db) =>
+      googleAccount(db, subject, { username: "player_0", invitationHash }),
+    ),
+  ).rejects.toMatchObject({ code: "USERNAME_TAKEN" });
+  const id = await tx((db) =>
+    googleAccount(db, subject, { username: "google_player", invitationHash }),
+  );
+  expect(id).not.toBe(host);
+  expect(await tx((db) => googleAccount(db, subject))).toBe(id);
+  await expect(
+    tx((db) =>
+      createAccount(db, "different_player", invitationHash, {
+        passwordHash: "fixture",
+      }),
+    ),
+  ).rejects.toMatchObject({ code: "INVALID_INVITE" });
+
+  const passwordInvite = randomBytes(32).toString("hex");
+  await database.query(
+    "INSERT INTO account_invites VALUES ($1, now() + interval '1 hour', NULL)",
+    [passwordInvite],
+  );
+  await expect(
+    tx((db) =>
+      createAccount(db, "google_player", passwordInvite, {
+        passwordHash: "fixture",
+      }),
+    ),
+  ).rejects.toMatchObject({ code: "USERNAME_TAKEN" });
+  expect(
+    await tx((db) =>
+      createAccount(db, "different_player", passwordInvite, {
+        passwordHash: "fixture",
+      }),
+    ),
+  ).toBeTruthy();
 });

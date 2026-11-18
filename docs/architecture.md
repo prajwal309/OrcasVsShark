@@ -26,11 +26,11 @@ Sound is an original short Web Audio tone generated only after a move when expli
 
 ## Online rooms and security boundary
 
-The first scoped Phase 3 increment adds private invite rooms at `/online` and `/game/[gameId]`. `components/game/game.tsx` accepts an optional online controller and reuses the local SVG table and controls. Online state comes from the server; local saves and undo remain local-only. `components/game/online-room.tsx` owns connection recovery and requests, while `components/lobby/online-lobby.tsx` creates and joins rooms.
+The home lobby offers casual matchmaking, private invite rooms, and computer setup. `components/game/game.tsx` accepts an optional online controller and reuses the local SVG table and controls. Online state comes from the server; local saves and undo remain local-only. `components/game/online-room.tsx` owns connection recovery and requests, while `components/lobby/online-lobby.tsx` creates and joins rooms. A PostgreSQL transaction serializes queue updates, expires inactive searches, and seats both players in the existing room protocol.
 
-`lib/multiplayer/transition.ts` checks application actions and calls the same pure engine. `store.ts` persists actions in PostgreSQL transactions using row locks, revision/ply checks and idempotency receipts. The Next room routes verify Supabase anonymous identities. RLS permits only seated reads; browser writes are revoked. Moves are append-only, and completed rounds are archived before rematches. See [the online protocol, setup and test boundaries](multiplayer.md).
+`lib/multiplayer/transition.ts` checks application actions and calls the same pure engine. `store.ts` persists actions in PostgreSQL transactions using row locks, revision/ply checks and idempotency receipts. The Next room routes verify PostgreSQL-backed sessions and check room membership before serving game data. Only the application database role has access to room tables. Moves are append-only, and completed rounds are archived before rematches. See [the online protocol, setup and test boundaries](multiplayer.md).
 
-Supabase Realtime reports new committed revisions, followed by an API hydration. Five-second polling recovers missed notifications and updates presence. No WebSocket server or in-process room map is deployed with Next/Vercel. `proxy.ts` supplies per-request script nonces and a restrictive CSP. Pages render dynamically to use those nonces; the configured Supabase HTTP and WebSocket origins are permitted. Styles still allow inline properties for board/progress rendering.
+The browser polls the room API every two seconds to fetch committed state and update presence. No WebSocket server or in-process room map is deployed with Next/Vercel. `proxy.ts` supplies per-request script nonces and a restrictive CSP. Pages render dynamically to use those nonces. Styles still allow inline properties for board/progress rendering.
 
 ## Computer opponent
 
@@ -40,4 +40,4 @@ Phase 2 computer play uses the existing local session and canonical engine. `lib
 
 ## Remaining phases
 
-Phase 2 analysis tools remain deferred. Private casual rooms from Phase 3 use anonymous accounts and have no clocks, public profiles, chat, or spectators. Future public features require the relevant privacy, moderation and data-model work before exposure. Ratings, repetition/no-progress policies, clocks and abandonment reconciliation remain separate work. Nothing in this increment authorizes a public production deployment.
+Phase 2 analysis tools remain deferred. Casual matchmaking and private rooms use invite-only player accounts. Clocks, public profiles, chat, and spectators remain deferred. Future public features require the relevant privacy, moderation and data-model work before exposure. Ratings, repetition/no-progress policies, clocks and abandonment reconciliation remain separate work. Nothing in this increment authorizes a public production deployment.

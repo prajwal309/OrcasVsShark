@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 
 export function proxy(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const origin = url ? new URL(url).origin : "";
   const dev = process.env.NODE_ENV !== "production";
   const policy = [
     "default-src 'self'",
@@ -11,7 +9,7 @@ export function proxy(request: NextRequest) {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data:",
     "font-src 'self'",
-    `connect-src 'self' ${origin} ${origin.replace(/^http/, "ws")}${dev ? " ws: wss:" : ""}`,
+    `connect-src 'self'${dev ? " ws: wss:" : ""}`,
     "media-src 'self' blob:",
     "worker-src 'self'",
     "object-src 'none'",

@@ -23,7 +23,7 @@ test("hydrates and plays with extension attributes on the body", async ({
     });
   });
 
-  await page.goto("/");
+  await page.goto("/play");
   await expect(page.getByText("Saved on this device")).toBeVisible();
   await expect(page.locator("body")).toHaveAttribute(
     "data-gr-ext-installed",

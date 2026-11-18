@@ -3,8 +3,9 @@ import { spawnSync } from "node:child_process";
 const env = {
   ...process.env,
   BUILD_OUTPUT_DIR: ".next-online",
-  NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321",
-  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "test-public-key",
+  GOOGLE_CLIENT_ID: "test-client-id",
+  GOOGLE_CLIENT_SECRET: "test-client-secret",
+  APP_ORIGIN: "http://127.0.0.1:3100",
   DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:55432/postgres",
 };
 for (const args of [

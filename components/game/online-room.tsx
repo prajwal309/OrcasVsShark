@@ -2,7 +2,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Game from "./game";
-import { browserAuth, accessToken } from "@/lib/auth/browser";
 import { ApiError, roomApi } from "@/lib/multiplayer/client";
 import type {
   RoomAction,
@@ -28,6 +27,7 @@ export function OnlineRoom({ code }: { code: string }) {
   const latest = useRef<RoomView | null>(null);
   const pending = useRef<RoomRequest | null>(null);
   const submitting = useRef(false);
+  const refreshing = useRef(false);
 
   const accept = useCallback((next: RoomView) => {
     if (latest.current && next.revision < latest.current.revision) return;
@@ -39,11 +39,20 @@ export function OnlineRoom({ code }: { code: string }) {
   }, []);
 
   const refresh = useCallback(async () => {
+    if (refreshing.current) return;
+    refreshing.current = true;
     try {
       accept(await roomApi(`/${code}`));
     } catch (error) {
       setConnected(false);
-      if (error instanceof ApiError && error.code === "NOT_SEATED") {
+      if (error instanceof ApiError && error.status === 401) {
+        latest.current = null;
+        pending.current = null;
+        setRoom(null);
+        setRetry(null);
+        setNeedsJoin(false);
+        setMessage(error.message);
+      } else if (error instanceof ApiError && error.code === "NOT_SEATED") {
         setNeedsJoin(true);
         setMessage("Join this room as Sharks.");
       } else
@@ -52,56 +61,14 @@ export function OnlineRoom({ code }: { code: string }) {
             ? error.message
             : "Connection lost. Reconnecting…",
         );
+    } finally {
+      refreshing.current = false;
     }
   }, [accept, code]);
 
   useEffect(() => {
-    let disposed = false;
-    let channel:
-      ReturnType<ReturnType<typeof browserAuth>["channel"]> | undefined;
     const initial = window.setTimeout(() => void refresh(), 0);
-    void (async () => {
-      try {
-        const token = await accessToken();
-        if (disposed) return;
-        const client = browserAuth();
-        await client.realtime.setAuth(token);
-        if (disposed) return;
-        channel = client
-          .channel(`room:${code}`)
-          .on(
-            "postgres_changes",
-            {
-              event: "UPDATE",
-              schema: "public",
-              table: "games",
-              filter: `code=eq.${code}`,
-            },
-            (payload) => {
-              // Ignore heartbeat-only updates to avoid a fetch/update feedback loop.
-              if (
-                Number(payload.new.revision) > (latest.current?.revision ?? -1)
-              )
-                void refresh();
-            },
-          )
-          .subscribe((status) => {
-            if (disposed) return;
-            if (status === "SUBSCRIBED") void refresh();
-            if (status === "CHANNEL_ERROR" || status === "TIMED_OUT")
-              setMessage(
-                "Live connection interrupted. Checking for updates every 5 seconds.",
-              );
-          });
-      } catch (error) {
-        if (!disposed)
-          setMessage(
-            error instanceof Error ? error.message : "Could not connect.",
-          );
-      }
-    })();
-    // Recovery and presence heartbeat; always hydrate from the authoritative API.
-    const interval = window.setInterval(() => void refresh(), 5000);
+    const interval = window.setInterval(() => void refresh(), 2000);
     const offline = () => {
       setConnected(false);
       setMessage("You are offline. Reconnecting…");
@@ -111,13 +78,11 @@ export function OnlineRoom({ code }: { code: string }) {
     window.addEventListener("offline", offline);
     window.addEventListener("focus", resume);
     return () => {
-      disposed = true;
       window.clearInterval(interval);
       window.clearTimeout(initial);
       window.removeEventListener("online", resume);
       window.removeEventListener("offline", offline);
       window.removeEventListener("focus", resume);
-      if (channel) void browserAuth().removeChannel(channel);
     };
   }, [code, refresh]);
 
@@ -173,7 +138,7 @@ export function OnlineRoom({ code }: { code: string }) {
               Reconnect
             </button>
           )}
-          <Link href="/online">Back to online lobby</Link>
+          <Link href={`/online?room=${code}`}>Online lobby and sign-in</Link>
           <Link href="/play">Play locally</Link>
         </main>
       </div>

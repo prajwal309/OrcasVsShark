@@ -1,6 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 export default defineConfig({
   testDir: "./tests/online",
+  outputDir: ".next-online/playwright-results",
   workers: 1,
   timeout: 90000,
   expect: { timeout: 10000 },

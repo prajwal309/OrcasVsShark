@@ -1,3 +1,5 @@
+import { createHash, randomBytes } from "node:crypto";
+import pg from "pg";
 import { test, expect, type Page } from "@playwright/test";
 import type { RoomRequest, RoomView } from "../../lib/multiplayer/protocol";
 import type { Move } from "../../lib/game/types";
@@ -8,14 +10,9 @@ const node = (page: Page, name: string) =>
 async function api(page: Page, code: string, body?: RoomRequest) {
   return page.evaluate(
     async ({ code, body }) => {
-      const key = Object.keys(localStorage).find(
-        (key) => key.startsWith("sb-") && key.endsWith("-auth-token"),
-      );
-      const session = JSON.parse(localStorage.getItem(key!)!);
       const response = await fetch(`/api/rooms/${code}`, {
         method: body ? "POST" : "GET",
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
           "Content-Type": "application/json",
         },
         body: body ? JSON.stringify(body) : undefined,
@@ -31,8 +28,42 @@ const action = (room: RoomView, move: Move): RoomRequest => ({
   expectedRevision: room.revision,
   action: { kind: "move", move },
 });
+const password = "a test-only long password";
+
+async function issueCode(resetUsername?: string) {
+  const token = randomBytes(32).toString("hex");
+  const db = new pg.Client({ connectionString: process.env.DATABASE_URL });
+  await db.connect();
+  try {
+    await db.query("BEGIN");
+    await db.query(
+      `INSERT INTO account_invites VALUES ($1, now() + interval '1 hour',
+       (SELECT id FROM accounts WHERE username = $2))`,
+      [createHash("sha256").update(token).digest("hex"), resetUsername ?? null],
+    );
+    await db.query("COMMIT");
+    return token;
+  } finally {
+    await db.end();
+  }
+}
+
+async function register(page: Page) {
+  const invitation = await issueCode();
+  const username = `player_${randomBytes(6).toString("hex")}`;
+  await page.goto("/online");
+  await page.getByRole("button", { name: "Use a signup code" }).click();
+  await page.getByLabel("Username").fill(username);
+  await page.getByLabel("Password").fill(password);
+  await page.getByLabel("Signup code").fill(invitation);
+  await page.getByRole("button", { name: "Create account" }).click();
+  await expect(page.getByText(`Signed in as ${username}`)).toBeVisible();
+  return username;
+}
+
 async function openMatch(host: Page, guest: Page) {
-  await host.goto("/online");
+  await register(host);
+  await register(guest);
   await host.getByRole("button", { name: "Create Game", exact: true }).click();
   await expect(
     host.getByText("Waiting for opponent", { exact: true }),
@@ -260,4 +291,214 @@ test("unauthenticated and malformed HTTP requests fail", async ({
   Object.assign(malformed.action, { unauthorizedField: "ignored?" });
   expect((await api(guest, code, malformed)).status).toBe(400);
   await other.close();
+});
+
+test("a player can reclaim a seat and password reset revokes old sessions", async ({
+  page,
+  browser,
+  request,
+}) => {
+  const username = await register(page);
+  await page.getByRole("button", { name: "Create Game", exact: true }).click();
+  await expect(
+    page.getByText("Waiting for opponent", { exact: true }),
+  ).toBeVisible();
+  const roomPath = new URL(page.url()).pathname;
+  const code = roomPath.split("/").at(-1)!;
+  const other = await browser.newContext();
+  try {
+    const returning = await other.newPage();
+    await returning.goto("/");
+    const header = returning.getByRole("banner");
+    await header.getByRole("link", { name: "Login", exact: true }).click();
+    await returning.getByLabel("Username").fill(username);
+    await returning.getByLabel("Password").fill(password);
+    await returning
+      .getByRole("button", { name: "Sign in", exact: true })
+      .click();
+    await expect(
+      header.getByRole("link", { name: username, exact: true }),
+    ).toBeVisible();
+    await returning.getByRole("link", { name: "Orcas vs Sharks home" }).click();
+    await expect(
+      header.getByRole("link", { name: username, exact: true }),
+    ).toBeVisible();
+    await expect
+      .poll(() =>
+        returning.evaluate(() => document.documentElement.scrollWidth),
+      )
+      .toBeLessThanOrEqual(await returning.evaluate(() => innerWidth));
+    await returning.reload();
+    await expect(
+      header.getByRole("link", { name: username, exact: true }),
+    ).toBeVisible();
+    await header.getByRole("link", { name: username, exact: true }).click();
+    await returning.getByRole("button", { name: "Sign out" }).click();
+    await expect(
+      header.getByRole("link", { name: "Login", exact: true }),
+    ).toBeVisible();
+    await returning.goto(roomPath);
+    await expect(returning.getByRole("status")).toContainText(
+      "Sign in to play.",
+    );
+    await returning
+      .getByRole("link", { name: "Online lobby and sign-in" })
+      .click();
+    await returning.getByLabel("Username").fill(username);
+    await returning.getByLabel("Password").fill(password);
+    await returning
+      .getByRole("button", { name: "Sign in", exact: true })
+      .click();
+    await expect(
+      returning.getByText("Waiting for opponent", { exact: true }),
+    ).toBeVisible();
+
+    const reset = await issueCode(username);
+    await returning.goto("/online");
+    await returning.getByRole("button", { name: "Sign out" }).click();
+    await returning.getByRole("button", { name: "Use a reset code" }).click();
+    await returning.getByLabel("Password").fill("new test-only long password");
+    await returning.getByLabel("Reset code").fill(reset);
+    await returning.getByRole("button", { name: "Reset password" }).click();
+    await expect(returning.getByText(`Signed in as ${username}`)).toBeVisible();
+    expect((await api(page, code)).status).toBe(401);
+    expect((await api(returning, code)).status).toBe(200);
+
+    expect(
+      (
+        await request.post("/api/account", {
+          headers: { Origin: "http://untrusted.example" },
+          data: { action: "logout" },
+        })
+      ).status(),
+    ).toBe(403);
+  } finally {
+    await other.close();
+  }
+});
+
+test("matchmaking cancels, resumes after reload, and seats both players in one live game", async ({
+  page,
+  browser,
+  request,
+}) => {
+  expect(
+    (
+      await request.post("/api/matchmaking", {
+        headers: { Origin: "http://127.0.0.1:3100" },
+        data: { action: "enter" },
+      })
+    ).status(),
+  ).toBe(401);
+  const other = await browser.newContext();
+  try {
+    const opponent = await other.newPage();
+    await register(page);
+    await register(opponent);
+    await page.goto("/");
+    await page.getByRole("button", { name: "Find opponent" }).click();
+    await expect(
+      page.getByRole("button", { name: "Cancel search" }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Cancel search" }).click();
+    await expect(
+      page.getByRole("button", { name: "Find opponent" }),
+    ).toBeVisible();
+
+    await opponent.getByRole("button", { name: "Find opponent" }).click();
+    await expect(opponent.getByText("Looking for an opponent…")).toBeVisible();
+    await opponent.reload();
+    await expect(
+      opponent.getByRole("button", { name: "Cancel search" }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Find opponent" }).click();
+
+    await expect(
+      page.getByRole("region", { name: "Online room" }),
+    ).toContainText("You are Sharks");
+    await expect(
+      opponent.getByRole("region", { name: "Online room" }),
+    ).toContainText("You are Orcas");
+    expect(page.url()).toBe(opponent.url());
+    await node(page, "c3").click();
+    await expect(node(opponent, "c3")).toHaveAttribute(
+      "aria-label",
+      "c3, shark",
+    );
+    await page.goto("/");
+    await expect(
+      page.getByRole("button", { name: "Find opponent" }),
+    ).toBeVisible();
+    await page.waitForURL("/");
+  } finally {
+    await other.close();
+  }
+});
+
+test("signup reports an existing username and keeps the invitation available", async ({
+  page,
+  browser,
+}) => {
+  const username = await register(page);
+  const invitation = await issueCode();
+  const other = await browser.newContext();
+  try {
+    const joining = await other.newPage();
+    await joining.goto("/online");
+    await joining.getByRole("button", { name: "Use a signup code" }).click();
+    await joining.getByLabel("Username").fill(username.toUpperCase());
+    await joining.getByLabel("Password").fill(password);
+    await joining.getByLabel("Signup code").fill(invitation);
+    await joining
+      .getByRole("button", { name: "Create account", exact: true })
+      .click();
+    await expect(
+      joining.getByText(
+        "An account already uses that username. Sign in or choose a different username.",
+      ),
+    ).toBeVisible();
+    const otherUsername = `new_${randomBytes(6).toString("hex")}`;
+    await joining.getByLabel("Username").fill(otherUsername);
+    await joining
+      .getByRole("button", { name: "Create account", exact: true })
+      .click();
+    await expect(
+      joining.getByText(`Signed in as ${otherUsername}`),
+    ).toBeVisible();
+  } finally {
+    await other.close();
+  }
+});
+
+test("Google signup starts a protected authorization and rejects a forged callback", async ({
+  page,
+}) => {
+  await page.route("https://accounts.google.com/**", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "text/plain",
+      body: "Google authorization test",
+    }),
+  );
+  await page.goto("/online");
+  await page
+    .getByRole("button", { name: "Create account with Google" })
+    .click();
+  await page.getByLabel("Username").fill("google_test_player");
+  await page.getByLabel("Signup code").fill(await issueCode());
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  await page.waitForURL("https://accounts.google.com/**");
+  const authorize = new URL(page.url());
+  expect(authorize.searchParams.get("client_id")).toBe("test-client-id");
+  expect(authorize.searchParams.get("code_challenge_method")).toBe("S256");
+  expect(authorize.searchParams.get("state")).toMatch(/^[a-f0-9]{64}$/);
+  await page.goto(
+    `/api/account/google/callback?code=forged&state=${"0".repeat(64)}`,
+  );
+  await expect(
+    page.getByText("Google sign-in did not finish. Please try again."),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Login", exact: true }),
+  ).toBeVisible();
 });

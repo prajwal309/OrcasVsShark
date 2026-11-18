@@ -1,10 +1,30 @@
--- Apply to a development Supabase project first. No existing tables are removed.
 BEGIN;
+CREATE TABLE public.accounts (
+  id uuid PRIMARY KEY,
+  username text NOT NULL UNIQUE CHECK (username ~ '^[a-z0-9_]{3,24}$'),
+  password_hash text NOT NULL
+);
+CREATE TABLE public.account_invites (
+  token_hash text PRIMARY KEY,
+  expires_at timestamptz NOT NULL,
+  reset_account uuid REFERENCES public.accounts(id)
+);
+CREATE TABLE public.account_sessions (
+  token_hash text PRIMARY KEY,
+  account_id uuid NOT NULL REFERENCES public.accounts(id) ON DELETE CASCADE,
+  expires_at timestamptz NOT NULL
+);
+CREATE INDEX account_sessions_account ON public.account_sessions(account_id);
+CREATE TABLE public.account_rate_limits (
+  bucket text PRIMARY KEY,
+  starts_at timestamptz NOT NULL,
+  hits integer NOT NULL
+);
 CREATE TABLE public.games (
   code text PRIMARY KEY CHECK (code ~ '^[A-Z2-9]{8}$'),
-  created_by uuid NOT NULL REFERENCES auth.users(id),
-  orcas_id uuid NOT NULL REFERENCES auth.users(id),
-  sharks_id uuid REFERENCES auth.users(id),
+  created_by uuid NOT NULL REFERENCES public.accounts(id),
+  orcas_id uuid NOT NULL REFERENCES public.accounts(id),
+  sharks_id uuid REFERENCES public.accounts(id),
   create_request_id uuid NOT NULL,
   ruleset_version text NOT NULL DEFAULT 'bagh-chal-classic-v1',
   engine_version text NOT NULL DEFAULT '1',
@@ -25,7 +45,7 @@ CREATE TABLE public.moves (
   game_code text NOT NULL REFERENCES public.games(code),
   round integer NOT NULL,
   ply integer NOT NULL,
-  actor uuid NOT NULL REFERENCES auth.users(id),
+  actor uuid NOT NULL REFERENCES public.accounts(id),
   move jsonb NOT NULL,
   request_id uuid NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -41,33 +61,19 @@ CREATE TABLE public.game_rounds (
 );
 CREATE TABLE public.room_requests (
   game_code text NOT NULL REFERENCES public.games(code),
-  actor uuid NOT NULL REFERENCES auth.users(id),
+  actor uuid NOT NULL REFERENCES public.accounts(id),
   request_id uuid NOT NULL,
   payload jsonb NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (game_code, actor, request_id)
 );
 CREATE TABLE public.room_rate_limits (
-  actor uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  actor uuid NOT NULL REFERENCES public.accounts(id) ON DELETE CASCADE,
   bucket text NOT NULL,
   starts_at timestamptz NOT NULL,
   hits integer NOT NULL,
   PRIMARY KEY (actor, bucket)
 );
-
-ALTER TABLE public.games ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.moves ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.game_rounds ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.room_requests ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.room_rate_limits ENABLE ROW LEVEL SECURITY;
-REVOKE ALL ON public.games, public.moves, public.game_rounds, public.room_requests, public.room_rate_limits FROM anon, authenticated;
-GRANT SELECT ON public.games, public.moves, public.game_rounds TO authenticated;
-CREATE POLICY seated_games ON public.games FOR SELECT TO authenticated
-  USING ((SELECT auth.uid()) IN (orcas_id, sharks_id));
-CREATE POLICY seated_moves ON public.moves FOR SELECT TO authenticated
-  USING (EXISTS (SELECT 1 FROM public.games g WHERE g.code = game_code AND (SELECT auth.uid()) IN (g.orcas_id, g.sharks_id)));
-CREATE POLICY seated_rounds ON public.game_rounds FOR SELECT TO authenticated
-  USING (EXISTS (SELECT 1 FROM public.games g WHERE g.code = game_code AND (SELECT auth.uid()) IN (g.orcas_id, g.sharks_id)));
 
 -- Even privileged application code cannot rewrite the move audit trail.
 CREATE FUNCTION public.reject_move_rewrite() RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $$
@@ -78,5 +84,15 @@ $$;
 CREATE TRIGGER moves_append_only BEFORE UPDATE OR DELETE ON public.moves
   FOR EACH ROW EXECUTE FUNCTION public.reject_move_rewrite();
 
-ALTER PUBLICATION supabase_realtime ADD TABLE public.games;
+ALTER TABLE public.accounts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.account_invites ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.account_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.account_rate_limits ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.games ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.moves ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.game_rounds ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.room_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.room_rate_limits ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON accounts, account_invites, account_sessions, account_rate_limits,
+  games, moves, game_rounds, room_requests, room_rate_limits FROM PUBLIC;
 COMMIT;

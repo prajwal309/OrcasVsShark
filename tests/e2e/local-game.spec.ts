@@ -153,7 +153,7 @@ test("invalid local save recovers safely and invalid action is announced", async
       '{"moves":[{"kind":"place","to":"a1"}]}',
     ),
   );
-  await page.goto("/");
+  await page.goto("/play");
   await expect(
     page.getByText("Saved game unavailable · started a new game"),
   ).toBeVisible();

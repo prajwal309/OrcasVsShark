@@ -124,3 +124,22 @@ test("refresh resumes a pending computer turn and game setup can return to two p
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Agree draw" })).toBeEnabled();
 });
+
+test("the online-first home also opens computer setup without signing in", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(
+    page.getByRole("heading", { name: "Play online", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Play against computer" }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "Set up a computer game" }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(page.getByLabel("Opponent")).toHaveValue("computer");
+  await page.getByLabel("Difficulty").selectOption("hard");
+  await page.getByRole("button", { name: "Start game" }).click();
+  await page.getByRole("button", { name: "Computer game setup" }).click();
+  await expect(page.getByLabel("Difficulty")).toHaveValue("hard");
+});

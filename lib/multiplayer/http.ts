@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { sessionAccount, requireSameOrigin } from "@/lib/auth/session";
 import { ZodError } from "zod";
 import { transaction } from "@/lib/database/connection";
 import { rateLimit } from "./store";
@@ -9,32 +9,12 @@ export async function actorFor(
   bucket: string,
   limit: number,
 ): Promise<string> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-  if (!url || !key || !process.env.DATABASE_URL)
-    throw new RoomError(
-      503,
-      "NOT_CONFIGURED",
-      "Online play is not configured. Local play is available.",
-    );
-  const token = request.headers
-    .get("authorization")
-    ?.match(/^Bearer ([^\s]+)$/)?.[1];
-  if (!token || token.length > 8192)
-    throw new RoomError(401, "UNAUTHENTICATED", "Sign in to play.");
-  const auth = createClient(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-  const { data, error } = await auth.auth.getUser(token);
-  if (error || !data.user)
-    throw new RoomError(
-      401,
-      "UNAUTHENTICATED",
-      "Your player session expired. Reload to reconnect.",
-    );
-  // Separate transaction: failed game actions still count against the limit.
-  await transaction((db) => rateLimit(db, data.user.id, bucket, limit));
-  return data.user.id;
+  if (request.method !== "GET") requireSameOrigin(request);
+  const account = await sessionAccount();
+  if (!account) throw new RoomError(401, "UNAUTHENTICATED", "Sign in to play.");
+  // Failed game actions still count against the limit.
+  await transaction((db) => rateLimit(db, account.id, bucket, limit));
+  return account.id;
 }
 
 export async function readJson(request: Request): Promise<unknown> {

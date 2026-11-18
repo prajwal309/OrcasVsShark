@@ -1,3 +1,4 @@
+import { acknowledgeMatch } from "@/lib/multiplayer/matchmaking";
 import { transaction } from "@/lib/database/connection";
 import { actorFor, readJson, respond } from "@/lib/multiplayer/http";
 import { roomCodeSchema, requestSchema } from "@/lib/multiplayer/protocol";
@@ -8,7 +9,11 @@ export async function GET(request: Request, context: Context) {
   return respond(async () => {
     const actor = await actorFor(request, "read", 120);
     const code = roomCodeSchema.parse((await context.params).gameId);
-    return transaction((db) => readRoom(db, code, actor));
+    return transaction(async (db) => {
+      const room = await readRoom(db, code, actor);
+      await acknowledgeMatch(db, actor, code);
+      return room;
+    });
   });
 }
 export async function POST(request: Request, context: Context) {

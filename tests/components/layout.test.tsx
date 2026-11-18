@@ -5,11 +5,7 @@ import { expect, it, vi } from "vitest";
 import RootLayout from "@/app/layout";
 
 it("hydrates when an extension adds body attributes before React loads", async () => {
-  const tree = (
-    <RootLayout>
-      <main>Ocean table</main>
-    </RootLayout>
-  );
+  const tree = await RootLayout({ children: <main>Ocean table</main> });
   const document = window.document.implementation.createHTMLDocument();
   document.open();
   document.write(renderToString(tree));

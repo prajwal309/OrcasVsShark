@@ -15,4 +15,4 @@ Rollback: retain the last verified immutable Vercel deployment and promote it th
 
 ## Online preview
 
-For private casual online rooms, follow [multiplayer setup](multiplayer.md) using a separate development Supabase project. Apply the additive room migration before deploying the app and set all three environment variables before the preview build. Verify both browsers against real Supabase Auth/Realtime; the automated fixture suite does not replace that check. Database migration and production promotion have not been performed. Retain backups and roll back application code without dropping the audit tables.
+For private casual multiplayer, follow [multiplayer setup](multiplayer.md) with a separate PostgreSQL database for preview. Apply the migrations and application-role grants before deployment. Configure the server-only `DATABASE_URL` and the exact HTTPS `APP_ORIGIN`. Verify two browsers against the preview database. Back up the database before applying future migrations and retain the audit tables during an application rollback.

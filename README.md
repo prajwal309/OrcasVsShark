@@ -4,7 +4,7 @@ An original, ocean-themed adaptation of Bagh-Chal, the traditional asymmetric st
 
 ## Current scope
 
-Phase 1: two players sharing a device. Play immediately at `/` or `/play`. Includes an interactive SVG board, both victory conditions, keyboard play, legal destinations and capture paths, undo, move history, restart/rematch, board flip, rules, sound, three themes, motion preferences, draw agreement, resignation, and local refresh recovery.
+The home screen opens the play lobby. For two players sharing a device, choose **Play locally on one device** or open `/play`. Includes an interactive SVG board, both victory conditions, keyboard play, legal destinations and capture paths, undo, move history, restart/rematch, board flip, rules, sound, three themes, motion preferences, draw agreement, resignation, and local refresh recovery.
 
 Choose **Settings → Board theme → Tigers & Goats** for original Tiger and Goat pieces on a forest table. Names, rules and announcements follow the theme. Deep ocean and Sand table remain available. Theme choices are saved on this device and can be changed during local, computer or online games without restarting.
 
@@ -12,9 +12,9 @@ Moves include piece glides and capture leaps, arrival ripples, capture fades, an
 
 A victory card announces the winning side with a short celebration. **Play again** starts a fresh local or computer game with the same computer settings. **View board** collapses the card to inspect the final position. Online games offer **Rematch**, requiring both players to agree before a new round begins.
 
-Computer play is available at `/` and `/play`: choose **Play against computer**, your side and difficulty, then **Start game**. Play either Orcas or Sharks at Easy, Medium or Hard difficulty. Search runs in a Web Worker, and games resume on refresh. Undo takes back your last move and the computer's reply. See [computer play](docs/computer.md).
+Choose **Set up a computer game** from the lobby, or **Play against computer** on the local board. Choose your side and difficulty, then select **Start game**. Play either Orcas or Sharks at Easy, Medium or Hard difficulty. Search runs in a Web Worker, and games resume on refresh. Undo takes back your last move and the computer's reply. See [computer play](docs/computer.md).
 
-Private casual online rooms are available at `/online` when Supabase is configured. Create an invite, join from another browser, and play with server-authoritative moves, reconnects, draw offers, resignation and mutually accepted rematches. See [multiplayer setup](docs/multiplayer.md). Analysis, named accounts, clocks and rated play remain future work.
+Sign in to find a casual opponent or create a private invite room. Online play uses self-hosted PostgreSQL and supports server-authoritative moves, reconnects, draw offers, resignation, and mutual rematches. See [multiplayer setup](docs/multiplayer.md). Analysis, clocks and rated play remain future work.
 
 ## Run
 
@@ -34,7 +34,7 @@ npm.cmd run dev
 
 This requires no execution-policy change. Use `npm.cmd` in place of `npm` and `npx.cmd` in place of `npx` for the verification commands below as well.
 
-Open http://localhost:3000. Local play needs no credentials. Online play requires the three values in `.env.example`, anonymous Supabase sign-in, and the room migration. See [multiplayer setup](docs/multiplayer.md).
+Open http://localhost:3000. Local play needs no credentials. Online play requires a PostgreSQL database, the multiplayer migrations, and the configuration in `.env.example`. See [multiplayer setup](docs/multiplayer.md).
 
 ## Commit and push from Windows
 

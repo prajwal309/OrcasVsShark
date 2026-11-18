@@ -280,13 +280,6 @@ h1 {
   opacity: 0.85;
   filter: drop-shadow(0 1px 1px #071d2a);
 }
-.coastal-board-glaze {
-  fill: var(--board);
-  fill-opacity: 0.76;
-}
-.coastal-lettering {
-  font-family: Georgia, "Times New Roman", serif;
-}
 .board-border {
   fill: none;
   stroke: var(--board-line);
@@ -337,11 +330,19 @@ h1 {
 }
 .board-caption {
   display: flex;
+  align-items: center;
+  gap: 12px;
   justify-content: space-between;
   padding: 8px 12px 1px;
   font-size: 7px;
   color: var(--muted);
   letter-spacing: 2px;
+}
+.cape-compass {
+  display: block;
+  flex: none;
+  width: clamp(44px, 9vw, 60px);
+  height: auto;
 }
 .board-corner {
   position: absolute;
@@ -1350,4 +1351,135 @@ dialog > p,
   align-items: center;
   min-height: 44px;
   color: var(--accent);
+}
+
+.header-identity {
+  display: flex;
+  align-items: center;
+  gap: clamp(8px, 2vw, 24px);
+  min-width: 0;
+}
+
+.account-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid #7bb8ad;
+  border-radius: 8px;
+  background: #bdebe0;
+  color: #102f34;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.account-link:hover {
+  background: #e2f8f0;
+}
+
+.account-link svg {
+  flex: none;
+}
+
+.account-link span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 700px) {
+  .account-link {
+    gap: 5px;
+    padding-inline: 7px;
+    font-size: 12px;
+  }
+
+  .account-link svg {
+    display: none;
+  }
+
+  .site-header nav {
+    flex-shrink: 0;
+  }
+}
+
+@media (max-width: 360px) {
+  .site-header {
+    padding-inline: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .header-identity:has(.account-link[data-signed-in]) .brand > span:last-child {
+    display: none;
+  }
+
+  .header-identity:has(.account-link[data-signed-in]) .brand-mark {
+    display: inline;
+  }
+}
+
+.play-lobby {
+  max-width: 1020px;
+  padding-bottom: 48px;
+}
+
+.play-lobby h1 {
+  margin-block: 8px 14px;
+}
+
+.play-modes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.play-mode {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.play-mode p {
+  margin: 0;
+}
+
+.play-mode .primary-button,
+.play-mode-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 10px 16px;
+}
+
+.play-mode-actions,
+.lobby-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.play-mode [role="status"]:empty {
+  position: absolute;
+}
+
+.lobby-account {
+  max-width: 620px;
+  scroll-margin-top: 16px;
+}
+
+.lobby-links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+@media (max-width: 650px) {
+  .play-modes {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

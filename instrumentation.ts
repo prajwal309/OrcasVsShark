@@ -1,28 +1,28 @@
-export async function register() {
-  if (process.env.NEXT_RUNTIME !== "nodejs") return;
-  const values = [
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
-    process.env.DATABASE_URL,
-  ];
-  if (!values.some(Boolean)) return; // The local game can run without a backend.
-  if (!values.every(Boolean))
+export function register() {
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) return;
+  const database = parseUrl(databaseUrl);
+  if (!["postgres:", "postgresql:"].includes(database.protocol))
+    throw new Error("DATABASE_URL must be a PostgreSQL connection string.");
+
+  const value = process.env.APP_ORIGIN ?? "http://localhost:3000";
+  const origin = parseUrl(value);
+  const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(
+    origin.hostname,
+  );
+  if (
+    origin.origin !== value ||
+    (origin.protocol !== "https:" && !(origin.protocol === "http:" && loopback))
+  )
     throw new Error(
-      "Online play requires NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY and DATABASE_URL together.",
+      "APP_ORIGIN must be an HTTPS origin or a local HTTP origin, without a trailing slash.",
     );
+}
+
+function parseUrl(value: string) {
   try {
-    const auth = new URL(values[0]!);
-    const database = new URL(values[2]!);
-    if (!(
-      auth.protocol === "https:" ||
-      (auth.protocol === "http:" &&
-        ["localhost", "127.0.0.1"].includes(auth.hostname))
-    ))
-      throw new Error();
-    if (!["postgres:", "postgresql:"].includes(database.protocol))
-      throw new Error();
+    return new URL(value);
   } catch {
-    // Do not include the URLs in errors: the database URI contains a password.
-    throw new Error("Invalid online service URL configuration.");
+    throw new Error("Invalid database or application origin configuration.");
   }
 }

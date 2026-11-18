@@ -2,6 +2,7 @@
 
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import Link from "next/link";
+import { CapeCodCompass } from "@/components/board/cape-cod-background";
 import { Board } from "@/components/board/board";
 import { ThemedPieceIcon as PieceIcon } from "@/components/board/themed-piece";
 import {
@@ -18,6 +19,7 @@ import { deserializeState, serializeState } from "@/lib/game/serialization";
 import { computerSettingsSchema, type ComputerSettings } from "@/lib/ai/types";
 import { useComputer } from "./use-computer";
 import { VictoryBanner } from "./victory-banner";
+import { AccountLink } from "@/components/navigation/account-navigation";
 import type { OnlineController } from "./online-room";
 import type { GameState, Move, NodeId, Side } from "@/lib/game/types";
 
@@ -97,7 +99,13 @@ export function Rules({
   );
 }
 
-export default function Game({ online }: { online?: OnlineController }) {
+export default function Game({
+  online,
+  openComputerSetup = false,
+}: {
+  online?: OnlineController;
+  openComputerSetup?: boolean;
+}) {
   const [localSession, setSession] = useState<Session>(() => fresh());
   const session: Session = online
     ? {
@@ -118,7 +126,7 @@ export default function Game({ online }: { online?: OnlineController }) {
   });
   const [modal, setModal] = useState<
     "rules" | "settings" | "restart" | "resign" | "draw" | "computer" | null
-  >(null);
+  >(openComputerSetup ? "computer" : null);
   const [setup, setSetup] = useState<ComputerSettings>({
     humanSide: "sharks",
     difficulty: "medium",
@@ -418,12 +426,15 @@ export default function Game({ online }: { online?: OnlineController }) {
       className={`site-shell theme-${settings.theme} ${settings.motion ? "" : "no-motion"}`}
     >
       <header className="site-header">
-        <Link className="brand" href="/" aria-label="Orcas vs Sharks home">
-          <span className="brand-mark">◈</span>
-          <span>
-            ORCAS <span className="brand-vs">vs</span> SHARKS
-          </span>
-        </Link>
+        <div className="header-identity">
+          <Link className="brand" href="/" aria-label="Orcas vs Sharks home">
+            <span className="brand-mark">◈</span>
+            <span>
+              ORCAS <span className="brand-vs">vs</span> SHARKS
+            </span>
+          </Link>
+          <AccountLink room={online?.room.code} />
+        </div>
         <nav aria-label="Main navigation">
           <Link href="/play" className="nav-active">
             Play
@@ -619,7 +630,11 @@ export default function Game({ online }: { online?: OnlineController }) {
               )}
               <div className="board-caption">
                 <span>{labels.caption}</span>
-                <span>01 — CLASSIC</span>
+                {settings.theme === "tigers-goats" ? (
+                  <span>01 — CLASSIC</span>
+                ) : (
+                  <CapeCodCompass />
+                )}
               </div>
             </div>
             <div
