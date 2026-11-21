@@ -12,7 +12,7 @@ export default async function Leaderboards({
 }) {
   const { mode: requested } = await searchParams;
   const mode = rankedModes.find((choice) => choice === requested) ?? "fast";
-  const leaders = readIfAvailable((db) => leaderboard(db, mode));
+  const leaders = await readIfAvailable((db) => leaderboard(db, mode));
 
   return (
     <div className="site-shell theme-ocean">

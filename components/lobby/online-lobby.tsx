@@ -13,7 +13,6 @@ import {
   useAccount,
 } from "@/components/navigation/account-navigation";
 import { roomApi } from "@/lib/multiplayer/client";
-import { onlineUnavailableMessage } from "@/lib/deployment";
 import { SiteThemeSelect } from "@/components/navigation/site-theme-select";
 import type { QueueAction, QueueState } from "@/lib/multiplayer/matchmaking";
 import { roomCodeSchema } from "@/lib/multiplayer/protocol";
@@ -29,6 +28,8 @@ function googleErrorMessage(error?: string) {
       return "";
     case "USERNAME_TAKEN":
       return "An account already uses that username. Sign in or choose a different username.";
+    case "EMAIL_TAKEN":
+      return "Could not create an account with that email address.";
     case "INVALID_INVITE":
       return "This signup code is invalid or expired.";
     case "GOOGLE_SIGNUP_REQUIRED":
@@ -243,7 +244,7 @@ export function OnlineLobby({
             <h2 id="online-mode">Play online</h2>
             <p>
               {onlineUnavailable
-                ? onlineUnavailableMessage
+                ? "Online accounts and matches are unavailable on this deployment."
                 : "Find an opponent for an untimed, casual match or invite a friend."}
             </p>
             {onlineUnavailable ? null : account ? (
@@ -360,7 +361,7 @@ export function OnlineLobby({
                     : "Your player account"}
           </h2>
           {onlineUnavailable ? (
-            <p>Sign-in and registration require the persistent game server.</p>
+            <p>Sign-in and registration are currently unavailable.</p>
           ) : account ? (
             <>
               <p>Signed in as {account}</p>
@@ -437,6 +438,19 @@ export function OnlineLobby({
                       title="Use 3–24 letters, digits, or underscores."
                       required
                       maxLength={24}
+                    />
+                  </>
+                )}
+                {mode === "register" && (
+                  <>
+                    <label htmlFor="account-email">Email address</label>
+                    <input
+                      id="account-email"
+                      name="email"
+                      type="email"
+                      autoComplete="email"
+                      maxLength={254}
+                      required
                     />
                   </>
                 )}

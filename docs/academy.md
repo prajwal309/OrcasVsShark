@@ -13,7 +13,7 @@ puzzle attempts. The progress cursor, requested hints, and verified openings
 of two-move exercises survive refresh.
 
 Guest progress is stored in browser localStorage. Sign in to use your account
-progress, backed by SQLite migration `002_learning.sql`. The browser and account
+progress, stored in PostgreSQL. The browser and account
 have independent progress histories. The account loads its saved progress when
 the Academy opens on another device. Pending account events retry safely after
 interruption, using a receipt for each event.

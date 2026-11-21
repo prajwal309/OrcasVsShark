@@ -23,7 +23,7 @@ Sign in to find a ranked opponent, play a casual match, or create a private room
 Open **Learn to Play** from the lobby or visit `/learn`. The Academy has 20
 board lessons, 12 tactical puzzles, six knowledge checks, and guided practice
 with the built-in computer opponent. Guests save learning progress in their
-browser. Signed-in players save it to SQLite and can resume from another device.
+browser. Signed-in players save it to PostgreSQL and can resume from another device.
 See the [Academy guide](docs/academy.md) for progress and authoring details.
 
 ## Run
@@ -44,7 +44,11 @@ npm.cmd run dev
 
 This requires no execution-policy change. Use `npm.cmd` in place of `npm` and `npx.cmd` in place of `npx` for the verification commands below as well.
 
-Open http://localhost:3000. Create a username and password to play online, or play locally without an account. The app creates and migrates `data/orcas.db` automatically. Run one Node.js instance with persistent local storage and back up the SQLite database before upgrades. See [multiplayer setup](docs/multiplayer.md) and the [production deployment runbook](docs/deployment.md).
+Open http://localhost:3000 to play locally without an account. To enable online
+play locally, put a PostgreSQL 16+ connection in `PRISMA_DATABASE_URL` in
+`.env.local`, then run `npm run db:deploy` before starting the app. Register
+with a unique username, email address, and password. See [multiplayer
+setup](docs/multiplayer.md) and [Vercel deployment](docs/deployment.md).
 
 ## Commit and push from Windows
 
@@ -63,6 +67,8 @@ Or from PowerShell, using the default Git for Windows installation path:
 The script stages all non-ignored changes, commits them, fetches and rebases onto remote `main` when present, then pushes to GitHub. It stops on errors or conflicts and requires the current branch to be `main`. Configure your Git identity and GitHub authentication before running it. Omitting the message uses `Update Orcas vs Sharks game`.
 
 ## Verify
+
+Set `TEST_POSTGRES_URL` in your shell to a disposable PostgreSQL database for integration and online browser tests. Each suite applies the Prisma migrations in an isolated schema.
 
 ```sh
 npx playwright install chromium

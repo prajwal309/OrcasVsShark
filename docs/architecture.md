@@ -26,9 +26,9 @@ Sound is an original short Web Audio tone generated only after a move when expli
 
 ## Online rooms and security boundary
 
-The home lobby offers casual matchmaking, private invite rooms, and computer setup. `components/game/game.tsx` accepts an optional online controller and reuses the local SVG table and controls. Online state comes from the server; local saves and undo remain local-only. `components/game/online-room.tsx` owns connection recovery and requests, while `components/lobby/online-lobby.tsx` creates and joins rooms. An immediate SQLite transaction serializes queue updates, expires inactive searches, and seats both players in the existing room protocol.
+The home lobby offers casual matchmaking, private invite rooms, and computer setup. `components/game/game.tsx` accepts an optional online controller and reuses the local SVG table and controls. Online state comes from the server; local saves and undo remain local-only. `components/game/online-room.tsx` owns connection recovery and requests, while `components/lobby/online-lobby.tsx` creates and joins rooms. A serializable PostgreSQL transaction serializes queue updates, expires inactive searches, and seats both players in the existing room protocol.
 
-`lib/multiplayer/transition.ts` checks application actions and calls the same pure engine. `store.ts` persists actions in immediate SQLite write transactions using revision and ply checks and idempotency receipts. The Next room routes verify SQLite-backed sessions and check room membership before serving game data. Only server code accesses the SQLite file. Moves are append-only, and completed rounds are archived before rematches. See [the online protocol, setup and test boundaries](multiplayer.md).
+`lib/multiplayer/transition.ts` checks application actions and calls the same pure engine. `store.ts` persists actions in serializable PostgreSQL transactions using revision and ply checks and idempotency receipts. The Next room routes verify PostgreSQL-backed sessions and check room membership before serving game data. Only server code accesses the database through Prisma. Moves are append-only, and completed rounds are archived before rematches. See [the online protocol, setup and test boundaries](multiplayer.md).
 
 The browser polls the room API every two seconds to fetch committed state and update presence. No WebSocket server or in-process room map is deployed with Next/Vercel. `proxy.ts` supplies per-request script nonces and a restrictive CSP. Pages render dynamically to use those nonces. Styles still allow inline properties for board/progress rendering.
 
@@ -42,10 +42,10 @@ Phase 2 computer play uses the existing local session and canonical engine. `lib
 
 Matchmaking uses separate queues for casual play and each ranked time control.
 Ranked opponents need mutually compatible Elo ranges. The server creates the
-room and starts its clock in the same SQLite transaction. Ranked clock records
+room and starts its clock in the same PostgreSQL transaction. Ranked clock records
 store a remaining balance for each side and a deadline for the active turn.
 A legal move updates the balances and deadline in the room transaction.
-Requests and the server's clock worker both settle overdue games. The room
+Room requests and the scheduled clock endpoint settle overdue games. The room
 result, ranked history, and both Elo updates commit together.
 
 Public profiles and leaderboards show username, rating, and ranked results by

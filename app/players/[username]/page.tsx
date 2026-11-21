@@ -18,7 +18,7 @@ export default async function Player({
 }) {
   const parsed = usernameSchema.safeParse((await params).username);
   if (!parsed.success) notFound();
-  const player = readIfAvailable((db) => playerProfile(db, parsed.data));
+  const player = await readIfAvailable((db) => playerProfile(db, parsed.data));
   if (player === null) notFound();
   if (!player) {
     return (
@@ -51,6 +51,7 @@ export default async function Player({
               wins = 0,
               losses = 0,
               draws = 0,
+              total_games: totalGames = 0,
             } = record ?? {};
             return (
               <section
@@ -61,7 +62,8 @@ export default async function Player({
                 <h2>{timeControls[mode].name}</h2>
                 <p className="ranked-rating">{rating} Elo</p>
                 <p>
-                  {wins} wins · {losses} losses · {draws} draws
+                  {totalGames} games · {wins} wins · {losses} losses · {draws}{" "}
+                  draws
                 </p>
               </section>
             );

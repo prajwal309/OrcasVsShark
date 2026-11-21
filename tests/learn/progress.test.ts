@@ -1,11 +1,8 @@
 // @vitest-environment node
 import { randomUUID } from "node:crypto";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { sqlClient } from "@/lib/database/connection";
-import { openDatabase } from "@/lib/database/sqlite.mjs";
+import { database, read, transaction } from "@/lib/database/connection";
+import { setupPostgres } from "../fixtures/postgres";
 import {
   applyEvent,
   emptyProgress,
@@ -34,6 +31,8 @@ const attempt = (
   answer: string,
   opening: string | null = null,
 ) => event(activity, { action: "attempt", answer, seconds: 3, opening });
+
+setupPostgres();
 
 describe("Academy progress", () => {
   it("counts incorrect attempts, hints and retries without awarding completion", () => {
@@ -97,67 +96,53 @@ describe("Academy progress", () => {
     });
   });
 
-  it("persists validated progress in SQLite without double counting retried requests or mixing users", () => {
-    const dir = mkdtempSync(join(tmpdir(), "orcas-academy-"));
-    const filename = join(dir, "progress.db");
+  it("persists validated progress without double counting retries or mixing users", async () => {
     const player = randomUUID();
     const another = randomUUID();
-    try {
-      const first = openDatabase(filename);
-      try {
-        const db = sqlClient(first);
-        for (const [id, username] of [
-          [player, "learner"],
-          [another, "another"],
-        ])
-          db.query(
-            "INSERT INTO accounts (id, username, password_hash) VALUES ($1, $2, 'fixture')",
-            [id, username],
-          );
-        const save = (input: LearningEvent) =>
-          first
-            .transaction(() => saveLearningEvent(db, player, input, 100))
-            .immediate();
-        const finish = attempt(lesson, "+c3");
-        save(finish);
-        save(finish);
-        save(attempt(puzzle, "b2-b3"));
-        save(event(puzzle, { action: "hint" }));
-        save(attempt(puzzle, "b2xd4"));
-        expect(
-          db.query(
-            "SELECT lessons_completed, puzzles_solved, puzzle_accuracy FROM learning_stats WHERE player_id = $1",
-            [player],
-          ).rows[0],
-        ).toEqual({
-          lessons_completed: 1,
-          puzzles_solved: 1,
-          puzzle_accuracy: 0.5,
-        });
-      } finally {
-        first.close();
-      }
-      const reopened = openDatabase(filename);
-      try {
-        const db = sqlClient(reopened);
-        const saved = loadProgress(db, player);
-        expect(saved.lesson[lesson.activityId]).toMatchObject({
-          attempts: 1,
-          completedAt: 100,
-        });
-        expect(saved.puzzle[puzzle.activityId]).toMatchObject({
-          attempts: 2,
-          successes: 1,
-          hints: 1,
-          seconds: 6,
-          completedAt: 100,
-        });
-        expect(loadProgress(db, another)).toEqual(emptyProgress);
-      } finally {
-        reopened.close();
-      }
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+    for (const [id, username] of [
+      [player, "learner"],
+      [another, "another"],
+    ])
+      await read((db) =>
+        db.query(
+          "INSERT INTO accounts (id, username, email, password_hash) VALUES ($1, $2, $2 || '@example.test', 'fixture')",
+          [id, username],
+        ),
+      );
+    const save = (input: LearningEvent) =>
+      transaction((db) => saveLearningEvent(db, player, input, 100));
+    const finish = attempt(lesson, "+c3");
+    await save(finish);
+    await save(finish);
+    await save(attempt(puzzle, "b2-b3"));
+    await save(event(puzzle, { action: "hint" }));
+    await save(attempt(puzzle, "b2xd4"));
+    const { rows } = await read((db) =>
+      db.query(
+        "SELECT lessons_completed, puzzles_solved, puzzle_accuracy FROM learning_stats WHERE player_id = $1",
+        [player],
+      ),
+    );
+    expect(rows[0]).toEqual({
+      lessons_completed: 1,
+      puzzles_solved: 1,
+      puzzle_accuracy: 0.5,
+    });
+    await database().$disconnect();
+    const saved = await read((db) => loadProgress(db, player));
+    expect(saved.lesson[lesson.activityId]).toMatchObject({
+      attempts: 1,
+      completedAt: 100,
+    });
+    expect(saved.puzzle[puzzle.activityId]).toMatchObject({
+      attempts: 2,
+      successes: 1,
+      hints: 1,
+      seconds: 6,
+      completedAt: 100,
+    });
+    expect(await read((db) => loadProgress(db, another))).toEqual(
+      emptyProgress,
+    );
   });
 });

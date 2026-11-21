@@ -66,7 +66,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# Local SQLite data and backups
+# Local database archives and backups
 /data/
 *.db
 *.db-wal
@@ -80,3 +80,5 @@ next-env.d.ts
 *.sqlite3-wal
 *.sqlite3-shm
 *.sqlite3-journal
+
+/lib/database/generated/

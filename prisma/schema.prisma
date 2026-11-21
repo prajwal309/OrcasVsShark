@@ -1,0 +1,249 @@
+generator client {
+  provider        = "prisma-client"
+  output          = "../lib/database/generated"
+  previewFeatures = ["partialIndexes"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model account_invites {
+  token_hash    String    @id
+  expires_at    Float
+  reset_account String?
+  accounts      accounts? @relation(fields: [reset_account], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model account_rate_limits {
+  bucket    String @id
+  starts_at Float
+  hits      Int
+}
+
+model account_sessions {
+  token_hash String   @id
+  account_id String
+  created_at Float    @default(dbgenerated("EXTRACT(epoch FROM clock_timestamp())"))
+  expires_at Float
+  accounts   accounts @relation(fields: [account_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([account_id], map: "account_sessions_account")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model accounts {
+  id                                                String             @id
+  username                                          String             @unique
+  email                                             String             @unique
+  password_hash                                     String?
+  google_subject                                    String?            @unique
+  created_at                                        Float              @default(dbgenerated("EXTRACT(epoch FROM clock_timestamp())"))
+  account_invites                                   account_invites[]
+  account_sessions                                  account_sessions[]
+  games_games_created_byToaccounts                  games[]            @relation("games_created_byToaccounts")
+  games_games_orcas_idToaccounts                    games[]            @relation("games_orcas_idToaccounts")
+  games_games_sharks_idToaccounts                   games[]            @relation("games_sharks_idToaccounts")
+  learning_events                                   learning_events[]
+  learning_stats                                    learning_stats?
+  lesson_progress                                   lesson_progress[]
+  matchmaking_queue                                 matchmaking_queue?
+  moves                                             moves[]
+  player_ratings                                    player_ratings[]
+  puzzle_attempts                                   puzzle_attempts[]
+  ranked_matches_ranked_matches_orcas_idToaccounts  ranked_matches[]   @relation("ranked_matches_orcas_idToaccounts")
+  ranked_matches_ranked_matches_sharks_idToaccounts ranked_matches[]   @relation("ranked_matches_sharks_idToaccounts")
+  room_rate_limits                                  room_rate_limits[]
+  room_requests                                     room_requests[]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model game_rounds {
+  game_code    String
+  round        Int
+  data         String
+  completed_at Float  @default(dbgenerated("EXTRACT(epoch FROM clock_timestamp())"))
+  games        games  @relation(fields: [game_code], references: [code], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([game_code, round])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model games {
+  code                                String              @id
+  created_by                          String
+  orcas_id                            String
+  sharks_id                           String?
+  create_request_id                   String
+  ruleset_version                     String              @default("bagh-chal-classic-v1")
+  engine_version                      String              @default("1")
+  current_ply                         Int                 @default(0)
+  revision                            Int                 @default(0)
+  data                                String
+  result                              String?
+  status                              String?             @default(dbgenerated("\nCASE\n    WHEN ((result IS NOT NULL) AND (result <> 'null'::text)) THEN 'finished'::text\n    WHEN (sharks_id IS NULL) THEN 'waiting'::text\n    ELSE 'active'::text\nEND"))
+  orcas_seen                          Float?
+  sharks_seen                         Float?
+  created_at                          Float               @default(dbgenerated("EXTRACT(epoch FROM clock_timestamp())"))
+  updated_at                          Float               @default(dbgenerated("EXTRACT(epoch FROM clock_timestamp())"))
+  game_rounds                         game_rounds[]
+  accounts_games_created_byToaccounts accounts            @relation("games_created_byToaccounts", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  accounts_games_orcas_idToaccounts   accounts            @relation("games_orcas_idToaccounts", fields: [orcas_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  accounts_games_sharks_idToaccounts  accounts?           @relation("games_sharks_idToaccounts", fields: [sharks_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  matchmaking_queue                   matchmaking_queue[]
+  moves                               moves[]
+  ranked_matches                      ranked_matches?
+  room_requests                       room_requests[]
+
+  @@unique([created_by, create_request_id])
+}
+
+model learning_events {
+  player_id String
+  event_id  String
+  accounts  accounts @relation(fields: [player_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([player_id, event_id])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model learning_stats {
+  player_id           String   @id
+  lessons_completed   Int
+  puzzles_solved      Int
+  puzzle_accuracy     Float?
+  current_streak      Int
+  current_kind        String
+  current_activity_id String
+  last_activity       Float
+  accounts            accounts @relation(fields: [player_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model lesson_progress {
+  player_id    String
+  lesson_id    String
+  kind         String
+  attempts     Int      @default(0)
+  successes    Int      @default(0)
+  hints_used   Int      @default(0)
+  time_spent   Int      @default(0)
+  completed_at Float?
+  opening      String?
+  hint_index   Int      @default(0)
+  accounts     accounts @relation(fields: [player_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([player_id, kind, lesson_id])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model matchmaking_queue {
+  account_id String   @id
+  joined_at  Float    @default(dbgenerated("EXTRACT(epoch FROM clock_timestamp())"))
+  expires_at Float
+  room_code  String?
+  mode       String   @default("casual")
+  accounts   accounts @relation(fields: [account_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  games      games?   @relation(fields: [room_code], references: [code], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([expires_at], map: "matchmaking_expiration")
+  @@index([mode, joined_at, account_id], map: "matchmaking_mode_waiting", where: raw("(room_code IS NULL)"))
+  @@index([joined_at, account_id], map: "matchmaking_waiting_order", where: raw("(room_code IS NULL)"))
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model moves {
+  game_code  String
+  round      Int
+  ply        Int
+  actor      String
+  move       String
+  request_id String
+  created_at Float    @default(dbgenerated("EXTRACT(epoch FROM clock_timestamp())"))
+  accounts   accounts @relation(fields: [actor], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  games      games    @relation(fields: [game_code], references: [code], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([game_code, round, ply])
+  @@unique([game_code, actor, request_id])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model player_ratings {
+  player_id   String
+  mode        String
+  rating      Int      @default(1500)
+  wins        Int      @default(0)
+  losses      Int      @default(0)
+  draws       Int      @default(0)
+  total_games Int?     @default(dbgenerated("((wins + losses) + draws)"))
+  accounts    accounts @relation(fields: [player_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([player_id, mode])
+  @@index([mode, rating(sort: Desc), player_id], map: "player_ratings_leaders")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model puzzle_attempts {
+  player_id    String
+  puzzle_id    String
+  attempts     Int      @default(0)
+  successes    Int      @default(0)
+  hints_used   Int      @default(0)
+  time_spent   Int      @default(0)
+  completed_at Float?
+  opening      String?
+  hint_index   Int      @default(0)
+  accounts     accounts @relation(fields: [player_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([player_id, puzzle_id])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model ranked_matches {
+  game_code                                   String   @id
+  mode                                        String
+  orcas_id                                    String
+  sharks_id                                   String
+  orcas_rating                                Int
+  sharks_rating                               Int
+  orcas_ms                                    Int
+  sharks_ms                                   Int
+  deadline                                    Float?
+  started_at                                  Float
+  ended_at                                    Float?
+  winner                                      String?
+  reason                                      String?
+  orcas_delta                                 Int?
+  games                                       games    @relation(fields: [game_code], references: [code], onDelete: NoAction, onUpdate: NoAction)
+  accounts_ranked_matches_orcas_idToaccounts  accounts @relation("ranked_matches_orcas_idToaccounts", fields: [orcas_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  accounts_ranked_matches_sharks_idToaccounts accounts @relation("ranked_matches_sharks_idToaccounts", fields: [sharks_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([deadline], map: "ranked_matches_expiring", where: raw("(deadline IS NOT NULL)"))
+  @@index([orcas_id, ended_at(sort: Desc)], map: "ranked_matches_orcas")
+  @@index([orcas_id], map: "ranked_matches_orcas_active", where: raw("(ended_at IS NULL)"))
+  @@index([sharks_id, ended_at(sort: Desc)], map: "ranked_matches_sharks")
+  @@index([sharks_id], map: "ranked_matches_sharks_active", where: raw("(ended_at IS NULL)"))
+}
+
+model room_rate_limits {
+  actor     String
+  bucket    String
+  starts_at Float
+  hits      Int
+  accounts  accounts @relation(fields: [actor], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([actor, bucket])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model room_requests {
+  game_code  String
+  actor      String
+  request_id String
+  payload    String
+  created_at Float    @default(dbgenerated("EXTRACT(epoch FROM clock_timestamp())"))
+  accounts   accounts @relation(fields: [actor], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  games      games    @relation(fields: [game_code], references: [code], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([game_code, actor, request_id])
+}

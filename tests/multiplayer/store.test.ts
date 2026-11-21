@@ -1,17 +1,9 @@
 // @vitest-environment node
-import { beforeAll, afterAll, describe, expect, it } from "vitest";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { beforeAll, describe, expect, it } from "vitest";
 import { randomBytes, randomUUID } from "node:crypto";
 import { acknowledgeMatch, updateQueue } from "@/lib/multiplayer/matchmaking";
 import { createAccount, googleAccount } from "@/lib/auth/accounts";
-import {
-  database,
-  sqlClient,
-  transaction,
-  type SqlClient,
-} from "@/lib/database/connection";
+import { read, transaction } from "@/lib/database/connection";
 import {
   createRoom,
   changeRoom,
@@ -26,18 +18,15 @@ import {
 } from "@/lib/multiplayer/protocol";
 import type { Move } from "@/lib/game/types";
 import victories from "../fixtures/victories.json";
+import { setupPostgres } from "../fixtures/postgres";
 
-const directory = mkdtempSync(join(tmpdir(), "orcas-store-"));
+setupPostgres();
 const host = randomUUID(),
   guest = randomUUID(),
   stranger = randomUUID();
-async function tx<T>(
-  work: (db: SqlClient) => T extends PromiseLike<unknown> ? never : T,
-) {
-  return transaction(work);
-}
+const tx = transaction;
 async function query(sql: string, values?: (string | number | null)[]) {
-  return sqlClient(database()).query(sql, values);
+  return read((db) => db.query(sql, values));
 }
 const request = (room: RoomView, action: RoomAction): RoomRequest => ({
   requestId: randomUUID(),
@@ -51,23 +40,14 @@ async function joined() {
     changeRoom(db, room.code, guest, request(room, { kind: "join" })),
   );
 }
-const previousPath = process.env.SQLITE_PATH;
 beforeAll(async () => {
-  process.env.SQLITE_PATH = join(directory, "orcas.db");
   for (const [index, actor] of [host, guest, stranger].entries())
     await query(
-      "INSERT INTO accounts (id, username, password_hash) VALUES ($1, $2, 'fixture')",
+      "INSERT INTO accounts (id, username, email, password_hash) VALUES ($1, $2, $2 || '@example.test', 'fixture')",
       [actor, `player_${index}`],
     );
 });
-afterAll(() => {
-  database().close();
-  if (previousPath === undefined) delete process.env.SQLITE_PATH;
-  else process.env.SQLITE_PATH = previousPath;
-  rmSync(directory, { recursive: true, force: true });
-});
-
-describe("authoritative SQLite room operations", () => {
+describe("authoritative PostgreSQL room operations", () => {
   it("creates a retry-safe room, reserves opposite seats and rejects a third player", async () => {
     const id = randomUUID();
     const first = await tx((db) => createRoom(db, host, id));
@@ -213,6 +193,11 @@ describe("authoritative SQLite room operations", () => {
     expect(
       results.filter((result) => result.status === "fulfilled"),
     ).toHaveLength(1);
+    expect(
+      results.find((result) => result.status === "rejected"),
+    ).toMatchObject({
+      reason: { code: "STALE_STATE" },
+    });
     expect((await tx((db) => readRoom(db, room.code, host))).state.ply).toBe(1);
   });
 
@@ -300,21 +285,19 @@ describe("authoritative SQLite room operations", () => {
     expect(room.ending).toEqual({ winner: "sharks", reason: "Resignation" });
   });
 
-  it("enables foreign keys and WAL and rejects rows referencing missing accounts", async () => {
-    expect(database().pragma("foreign_keys", { simple: true })).toBe(1);
-    expect(database().pragma("journal_mode", { simple: true })).toBe("wal");
+  it("enforces foreign keys for accounts", async () => {
     await expect(
       query(
         "INSERT INTO account_sessions (token_hash, account_id, expires_at) VALUES ($1, $2, $3)",
         ["invalid-session", randomUUID(), Date.now() / 1000 + 60],
       ),
-    ).rejects.toThrow("FOREIGN KEY");
+    ).rejects.toThrow(/foreign key/i);
   });
 
   it("reports disconnected opponents and restores presence without changing the game", async () => {
     const room = await joined();
     await query(
-      "UPDATE games SET sharks_seen = unixepoch('subsec') - 60 WHERE code=$1",
+      "UPDATE games SET sharks_seen = EXTRACT(EPOCH FROM clock_timestamp()) - 60 WHERE code=$1",
       [room.code],
     );
     const disconnected = await tx((db) => readRoom(db, room.code, host));
@@ -339,7 +322,7 @@ it("expires inactive queue entries and reuses one durable match for repeated req
     status: "waiting",
   });
   await query(
-    "UPDATE matchmaking_queue SET expires_at = unixepoch('subsec') - 1 WHERE account_id = $1",
+    "UPDATE matchmaking_queue SET expires_at = EXTRACT(EPOCH FROM clock_timestamp()) - 1 WHERE account_id = $1",
     [host],
   );
   expect(await tx((db) => updateQueue(db, guest, "enter"))).toEqual({
@@ -370,47 +353,75 @@ it("requires an invitation for the first Google sign-in and never links by usern
   const subject = "google-test-subject";
   const invitationHash = randomBytes(32).toString("hex");
   await query(
-    "INSERT INTO account_invites VALUES ($1, unixepoch('subsec') + 3600, NULL)",
+    "INSERT INTO account_invites VALUES ($1, EXTRACT(EPOCH FROM clock_timestamp()) + 3600, NULL)",
     [invitationHash],
   );
-  await expect(tx((db) => googleAccount(db, subject))).rejects.toMatchObject({
+  await expect(
+    tx((db) => googleAccount(db, subject, "google@example.test")),
+  ).rejects.toMatchObject({
     code: "GOOGLE_SIGNUP_REQUIRED",
   });
   await expect(
     tx((db) =>
-      googleAccount(db, subject, { username: "player_0", invitationHash }),
+      googleAccount(db, subject, "google@example.test", {
+        username: "player_0",
+        invitationHash,
+      }),
     ),
   ).rejects.toMatchObject({ code: "USERNAME_TAKEN" });
   const id = await tx((db) =>
-    googleAccount(db, subject, { username: "google_player", invitationHash }),
+    googleAccount(db, subject, "google@example.test", {
+      username: "google_player",
+      invitationHash,
+    }),
   );
   expect(id).not.toBe(host);
-  expect(await tx((db) => googleAccount(db, subject))).toBe(id);
+  expect(
+    await tx((db) => googleAccount(db, subject, "google@example.test")),
+  ).toBe(id);
   await expect(
     tx((db) =>
-      createAccount(db, "different_player", invitationHash, {
-        passwordHash: "fixture",
-      }),
+      createAccount(
+        db,
+        "different_player",
+        "different@example.test",
+        invitationHash,
+        {
+          passwordHash: "fixture",
+        },
+      ),
     ),
   ).rejects.toMatchObject({ code: "INVALID_INVITE" });
 
   const passwordInvite = randomBytes(32).toString("hex");
   await query(
-    "INSERT INTO account_invites VALUES ($1, unixepoch('subsec') + 3600, NULL)",
+    "INSERT INTO account_invites VALUES ($1, EXTRACT(EPOCH FROM clock_timestamp()) + 3600, NULL)",
     [passwordInvite],
   );
   await expect(
     tx((db) =>
-      createAccount(db, "google_player", passwordInvite, {
-        passwordHash: "fixture",
-      }),
+      createAccount(
+        db,
+        "google_player",
+        "another@example.test",
+        passwordInvite,
+        {
+          passwordHash: "fixture",
+        },
+      ),
     ),
   ).rejects.toMatchObject({ code: "USERNAME_TAKEN" });
   expect(
     await tx((db) =>
-      createAccount(db, "different_player", passwordInvite, {
-        passwordHash: "fixture",
-      }),
+      createAccount(
+        db,
+        "different_player",
+        "different@example.test",
+        passwordInvite,
+        {
+          passwordHash: "fixture",
+        },
+      ),
     ),
   ).toBeTruthy();
 });

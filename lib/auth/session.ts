@@ -3,7 +3,6 @@ import { cookies } from "next/headers";
 import {
   read,
   readIfAvailable,
-  requireDatabaseRuntime,
   type SqlClient,
 } from "@/lib/database/connection";
 import { RoomError } from "@/lib/multiplayer/protocol";
@@ -30,7 +29,6 @@ export function requireSameOrigin(
   request: Request,
   { allowLocalAddress = true } = {},
 ) {
-  requireDatabaseRuntime();
   const configured = appOrigin().origin;
   const origin = request.headers.get("origin");
   if (origin === configured && configured.startsWith("https://")) return true;
@@ -55,18 +53,18 @@ export function requireSameOrigin(
   );
 }
 
-export function replaceSession(
+export async function replaceSession(
   db: SqlClient,
   accountId: string,
   token: string,
   previous?: string,
 ) {
   if (previous)
-    db.query("DELETE FROM account_sessions WHERE token_hash = $1", [
+    await db.query("DELETE FROM account_sessions WHERE token_hash = $1", [
       hashToken(previous),
     ]);
-  db.query(
-    "INSERT INTO account_sessions (token_hash, account_id, expires_at) VALUES ($1, $2, unixepoch('subsec') + $3)",
+  await db.query(
+    "INSERT INTO account_sessions (token_hash, account_id, expires_at) VALUES ($1, $2, EXTRACT(EPOCH FROM clock_timestamp()) + $3)",
     [hashToken(token), accountId, sessionSeconds],
   );
 }
@@ -78,14 +76,17 @@ export async function currentToken() {
 export async function sessionAccount({ allowUnavailable = false } = {}) {
   const token = await currentToken();
   if (!token || !/^[a-f0-9]{64}$/.test(token)) return null;
-  const lookup = (db: SqlClient) => {
-    const { rows } = db.query<{ id: string; username: string }>(
-      `SELECT a.id, a.username FROM account_sessions s
-       JOIN accounts a ON a.id = s.account_id
-       WHERE s.token_hash = $1 AND s.expires_at > unixepoch('subsec')`,
-      [hashToken(token)],
-    );
-    return rows[0] ?? null;
+  const lookup = async (db: SqlClient) => {
+    const session = await db.account_sessions.findUnique({
+      where: {
+        token_hash: hashToken(token),
+        expires_at: { gt: Date.now() / 1000 },
+      },
+      select: { accounts: { select: { id: true, username: true } } },
+    });
+    return session?.accounts ?? null;
   };
-  return (allowUnavailable ? readIfAvailable(lookup) : read(lookup)) ?? null;
+  return (
+    (await (allowUnavailable ? readIfAvailable(lookup) : read(lookup))) ?? null
+  );
 }

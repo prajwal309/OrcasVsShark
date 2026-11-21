@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
-import { openDatabase } from "../../lib/database/sqlite.mjs";
+import { postgresQuery } from "../../scripts/test-postgres.mjs";
 import type { RoomView } from "../../lib/multiplayer/protocol";
 
 const origin = "http://127.0.0.1:3100";
@@ -11,7 +11,13 @@ async function enroll(page: Page) {
   const password = "ranked test password";
   const response = await page.request.post(`${origin}/api/account`, {
     headers: { Origin: origin },
-    data: { action: "register", username, password, confirmPassword: password },
+    data: {
+      action: "register",
+      username,
+      email: username + "@example.test",
+      password,
+      confirmPassword: password,
+    },
   });
   expect(response.ok()).toBe(true);
   await page.goto(origin);
@@ -67,23 +73,21 @@ test("ranked pairing, clock recovery and unattended timeout update profiles and 
 
     await page.context().setOffline(true);
     await second.setOffline(true);
-    const filename = process.env.SQLITE_PATH;
-    if (!filename) throw new Error("Run via npm run test:online");
-    const db = openDatabase(filename);
     try {
-      db.prepare(
-        "UPDATE ranked_matches SET deadline = ? WHERE game_code = ?",
-      ).run(Date.now() - 1, code);
-      await expect
-        .poll(() =>
-          db
-            .prepare("SELECT winner FROM ranked_matches WHERE game_code = ?")
-            .pluck()
-            .get(code),
-        )
-        .toBe("sharks");
+      await postgresQuery(
+        "UPDATE ranked_matches SET deadline = $1 WHERE game_code = $2",
+        [Date.now() - 1, code],
+      );
+      const settled = await fetch(`${origin}/api/cron/ranked`, {
+        headers: { Authorization: `Bearer ${process.env.CRON_SECRET}` },
+      });
+      expect(settled.status).toBe(200);
+      const { rows } = await postgresQuery(
+        "SELECT winner FROM ranked_matches WHERE game_code = $1",
+        [code],
+      );
+      expect(rows[0].winner).toBe("sharks");
     } finally {
-      db.close();
       await page.context().setOffline(false);
       await second.setOffline(false);
     }

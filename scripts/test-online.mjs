@@ -1,9 +1,7 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { isolatedDatabase } from "./test-postgres.mjs";
 
-const directory = mkdtempSync(join(tmpdir(), "orcas-online-"));
+const database = await isolatedDatabase();
 const env = {
   ...process.env,
   BUILD_OUTPUT_DIR: ".next-online",
@@ -11,7 +9,8 @@ const env = {
   GOOGLE_CLIENT_SECRET: "test-client-secret",
   APP_ORIGIN: "http://127.0.0.1:3100",
   REQUIRE_SIGNUP_CODE: "false",
-  SQLITE_PATH: join(directory, "orcas.db"),
+  PRISMA_DATABASE_URL: database.url,
+  CRON_SECRET: "test-secret-for-ranked-clock-settlement",
 };
 try {
   for (const args of [
@@ -33,5 +32,5 @@ try {
     }
   }
 } finally {
-  rmSync(directory, { recursive: true, force: true });
+  await database.drop();
 }

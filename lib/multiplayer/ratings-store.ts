@@ -24,12 +24,14 @@ export type RankedMatch = {
   sharks_name: string;
 };
 
-export function rankedMatch(db: SqlClient, code: string) {
-  return db.query<RankedMatch>(
-    `SELECT m.*, o.username AS orcas_name, s.username AS sharks_name
+export async function rankedMatch(db: SqlClient, code: string) {
+  return (
+    await db.query<RankedMatch>(
+      `SELECT m.*, o.username AS orcas_name, s.username AS sharks_name
      FROM ranked_matches m JOIN accounts o ON o.id = m.orcas_id
      JOIN accounts s ON s.id = m.sharks_id WHERE m.game_code = $1`,
-    [code],
+      [code],
+    )
   ).rows[0];
 }
 
@@ -64,15 +66,17 @@ export function rankedView(
   };
 }
 
-export function activeRankedMatch(db: SqlClient, player: string) {
-  return db.query<{ game_code: string; mode: RankedMode }>(
-    `SELECT game_code, mode FROM ranked_matches
+export async function activeRankedMatch(db: SqlClient, player: string) {
+  return (
+    await db.query<{ game_code: string; mode: RankedMode; deadline: number }>(
+      `SELECT game_code, mode, deadline FROM ranked_matches
      WHERE ended_at IS NULL AND (orcas_id = $1 OR sharks_id = $1)`,
-    [player],
+      [player],
+    )
   ).rows[0];
 }
 
-export function startRankedMatch(
+export async function startRankedMatch(
   db: SqlClient,
   code: string,
   mode: RankedMode,
@@ -81,7 +85,7 @@ export function startRankedMatch(
   now: number,
 ) {
   const clock = startClock(mode, now);
-  const match = db.query(
+  const match = await db.query(
     `INSERT INTO ranked_matches (game_code, mode, orcas_id, sharks_id, orcas_rating,
         sharks_rating, orcas_ms, sharks_ms, deadline, started_at)
      SELECT $1, $2, $3, $4, o.rating, s.rating, $5, $6, $7, $8
@@ -102,14 +106,14 @@ export function startRankedMatch(
     throw new Error("Could not initialize ranked ratings.");
 }
 
-export function saveClock(db: SqlClient, code: string, clock: Clock) {
-  db.query(
+export async function saveClock(db: SqlClient, code: string, clock: Clock) {
+  await db.query(
     "UPDATE ranked_matches SET orcas_ms = $2, sharks_ms = $3, deadline = $4 WHERE game_code = $1",
     [code, clock.remaining.orcas, clock.remaining.sharks, clock.deadline],
   );
 }
 
-export function finishRankedMatch(
+export async function finishRankedMatch(
   db: SqlClient,
   code: string,
   match: RankedMatch,
@@ -122,7 +126,7 @@ export function finishRankedMatch(
     match.sharks_rating,
     ending.winner === "draw" ? 0.5 : ending.winner === "orcas" ? 1 : 0,
   );
-  const updated = db.query(
+  const updated = await db.query(
     `UPDATE ranked_matches SET orcas_ms = $2, sharks_ms = $3, deadline = NULL,
        ended_at = $4, winner = $5, reason = $6, orcas_delta = $7
      WHERE game_code = $1 AND ended_at IS NULL`,
@@ -138,7 +142,7 @@ export function finishRankedMatch(
   );
   if (!updated.rowCount) return;
   for (const side of ["orcas", "sharks"] as const) {
-    db.query(
+    await db.query(
       `UPDATE player_ratings SET rating = rating + $3,
          wins = wins + $4, losses = losses + $5, draws = draws + $6
        WHERE player_id = $1 AND mode = $2`,
@@ -160,6 +164,7 @@ type Rating = {
   wins: number;
   losses: number;
   draws: number;
+  total_games: number;
 };
 type History = {
   mode: RankedMode;
@@ -171,18 +176,23 @@ type History = {
   ended_at: number;
 };
 
-export function playerProfile(db: SqlClient, username: string) {
-  const account = db.query<{ id: string; username: string }>(
-    "SELECT id, username FROM accounts WHERE username = $1",
-    [username],
+export async function playerProfile(db: SqlClient, username: string) {
+  const account = (
+    await db.query<{ id: string; username: string }>(
+      "SELECT id, username FROM accounts WHERE username = $1",
+      [username],
+    )
   ).rows[0];
   if (!account) return null;
-  const ratings = db.query<Rating>(
-    "SELECT mode, rating, wins, losses, draws FROM player_ratings WHERE player_id = $1",
-    [account.id],
+  const ratings = (
+    await db.query<Rating>(
+      "SELECT mode, rating, wins, losses, draws, total_games FROM player_ratings WHERE player_id = $1",
+      [account.id],
+    )
   ).rows;
-  const history = db.query<History>(
-    `SELECT m.mode,
+  const history = (
+    await db.query<History>(
+      `SELECT m.mode,
        CASE WHEN m.orcas_id = $1 THEN s.username ELSE o.username END AS opponent,
        CASE WHEN m.winner = 'draw' THEN 'Draw'
          WHEN (m.orcas_id = $1 AND m.winner = 'orcas') OR (m.sharks_id = $1 AND m.winner = 'sharks') THEN 'Win'
@@ -195,17 +205,20 @@ export function playerProfile(db: SqlClient, username: string) {
        JOIN accounts s ON s.id = m.sharks_id
      WHERE m.ended_at IS NOT NULL AND (m.orcas_id = $1 OR m.sharks_id = $1)
      ORDER BY m.ended_at DESC, m.game_code LIMIT 30`,
-    [account.id],
+      [account.id],
+    )
   ).rows;
   return { username: account.username, ratings, history };
 }
 
-export function leaderboard(db: SqlClient, mode: RankedMode) {
-  return db.query<Rating & { username: string }>(
-    `SELECT r.mode, a.username, r.rating, r.wins, r.losses, r.draws
+export async function leaderboard(db: SqlClient, mode: RankedMode) {
+  return (
+    await db.query<Rating & { username: string }>(
+      `SELECT r.mode, a.username, r.rating, r.wins, r.losses, r.draws, r.total_games
      FROM player_ratings r JOIN accounts a ON a.id = r.player_id
-     WHERE r.mode = $1 AND (r.wins + r.losses + r.draws) > 0
+     WHERE r.mode = $1 AND r.total_games > 0
      ORDER BY r.rating DESC, a.username LIMIT 50`,
-    [mode],
+      [mode],
+    )
   ).rows;
 }

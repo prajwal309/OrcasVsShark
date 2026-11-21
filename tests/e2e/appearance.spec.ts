@@ -31,7 +31,7 @@ test("uses the Royal Navy palette by default and keeps controls legible on both 
   await page.goto("/");
   const root = page.locator("html");
   const primary = page.getByRole("link", {
-    name: "Sign in to play online",
+    name: "Set up a computer game",
     exact: true,
   });
   const account = page.locator("#online-account");
@@ -42,13 +42,10 @@ test("uses the Royal Navy palette by default and keeps controls legible on both 
   );
   await expect(page.locator("body")).toHaveCSS("color", "rgb(252, 250, 246)");
   await expect(primary).toHaveCSS("background-color", "rgb(213, 165, 71)");
-  await expect(
-    page.getByRole("link", { name: "Login", exact: true }),
-  ).toHaveCSS("background-color", "rgb(232, 224, 204)");
   expect(await contrast(primary)).toBeGreaterThanOrEqual(4.5);
   expect(
     await contrast(
-      page.getByRole("link", { name: "Create an account" }),
+      account.getByText("Sign-in and registration are currently unavailable."),
       account,
     ),
   ).toBeGreaterThanOrEqual(4.5);
@@ -58,7 +55,7 @@ test("uses the Royal Navy palette by default and keeps controls legible on both 
   expect(await contrast(primary)).toBeGreaterThanOrEqual(4.5);
   expect(
     await contrast(
-      page.getByRole("link", { name: "Create an account" }),
+      account.getByText("Sign-in and registration are currently unavailable."),
       account,
     ),
   ).toBeGreaterThanOrEqual(4.5);

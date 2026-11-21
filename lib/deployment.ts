@@ -1,16 +1,11 @@
-export const onlineUnavailableMessage =
-  "Online accounts and matches are unavailable on this deployment.";
-
-export function sqliteDisabled() {
-  return (
-    process.env.VERCEL === "1" ||
-    !!process.env.VERCEL_ENV ||
-    process.env.ORCAS_DISABLE_SQLITE === "1"
-  );
-}
-
 export function appOrigin() {
-  const configured = process.env.APP_ORIGIN ?? "http://localhost:3000";
+  const vercelHost =
+    (process.env.VERCEL_ENV === "production" &&
+      process.env.VERCEL_PROJECT_PRODUCTION_URL) ||
+    process.env.VERCEL_URL;
+  const configured =
+    process.env.APP_ORIGIN ||
+    (vercelHost ? `https://${vercelHost}` : "http://localhost:3000");
   const origin = URL.parse(configured);
   const loopback =
     origin && ["localhost", "127.0.0.1", "[::1]"].includes(origin.hostname);

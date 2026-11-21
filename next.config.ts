@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   poweredByHeader: false,
-  serverExternalPackages: ["better-sqlite3"],
+  serverExternalPackages: ["@node-rs/argon2"],
   distDir: process.env.BUILD_OUTPUT_DIR || ".next",
   async headers() {
     return [

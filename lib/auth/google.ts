@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { z } from "zod";
-import { usernameSchema } from "./accounts";
-import { appOrigin, sqliteDisabled } from "@/lib/deployment";
+import { emailSchema, usernameSchema } from "./accounts";
+import { appOrigin } from "@/lib/deployment";
 import { roomCodeSchema, RoomError } from "@/lib/multiplayer/protocol";
 
 export function googleCookie(secure: boolean) {
@@ -22,7 +22,8 @@ export const googleAttemptSchema = z.strictObject({
 export function googleConfiguration() {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  if (!clientId || !clientSecret || sqliteDisabled()) return null;
+  if (!clientId || !clientSecret || !process.env.PRISMA_DATABASE_URL)
+    return null;
   let origin: string;
   try {
     origin = appOrigin().origin;
@@ -47,7 +48,7 @@ export function beginGoogle(
     client_id: config.clientId,
     redirect_uri: config.redirectUri,
     response_type: "code",
-    scope: "openid",
+    scope: "openid email",
     prompt: "select_account",
     state,
     code_challenge: createHash("sha256").update(verifier).digest("base64url"),
@@ -56,7 +57,7 @@ export function beginGoogle(
   return { state, verifier, url: url.href };
 }
 
-export async function googleSubject(
+export async function googleIdentity(
   config: NonNullable<ReturnType<typeof googleConfiguration>>,
   code: string,
   verifier: string,
@@ -93,6 +94,10 @@ export async function googleSubject(
   if (!profile.ok)
     throw new RoomError(401, "GOOGLE_FAILED", "Google sign-in failed.");
   return z
-    .object({ sub: z.string().min(1).max(255) })
-    .parse(await profile.json()).sub;
+    .object({
+      sub: z.string().min(1).max(255),
+      email: emailSchema,
+      email_verified: z.literal(true),
+    })
+    .parse(await profile.json());
 }

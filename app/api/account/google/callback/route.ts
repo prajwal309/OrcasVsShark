@@ -6,7 +6,7 @@ import {
   googleAttemptSchema,
   googleConfiguration,
   googleCookie,
-  googleSubject,
+  googleIdentity,
 } from "@/lib/auth/google";
 import {
   currentToken,
@@ -62,12 +62,17 @@ export async function GET(request: Request) {
     const code = parameters.get("code");
     if (!code || code.length > 2048)
       throw new Error("Invalid Google authorization code.");
-    const subject = await googleSubject(config, code, attempt.verifier);
+    const identity = await googleIdentity(config, code, attempt.verifier);
     const token = randomBytes(32).toString("hex");
     const previous = await currentToken();
-    transaction((db) => {
-      const id = googleAccount(db, subject, attempt.signup);
-      replaceSession(db, id, token, previous);
+    await transaction(async (db) => {
+      const id = await googleAccount(
+        db,
+        identity.sub,
+        identity.email,
+        attempt.signup,
+      );
+      await replaceSession(db, id, token, previous);
     });
     jar.set(sessionCookie, token, {
       ...attributes,

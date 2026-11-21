@@ -1,7 +1,6 @@
 import { signupCodeRequired } from "@/lib/auth/accounts";
 import { googleConfiguration } from "@/lib/auth/google";
 import { OnlineLobby } from "@/components/lobby/online-lobby";
-import { sqliteDisabled } from "@/lib/deployment";
 import { roomCodeSchema } from "@/lib/multiplayer/protocol";
 
 export default async function OnlinePage({
@@ -13,7 +12,7 @@ export default async function OnlinePage({
   const room = roomCodeSchema.safeParse(params.room);
   return (
     <OnlineLobby
-      onlineUnavailable={sqliteDisabled()}
+      onlineUnavailable={!process.env.PRISMA_DATABASE_URL}
       key={params.account === "register" ? "register" : "login"}
       register={params.account === "register"}
       requireSignupCode={signupCodeRequired()}

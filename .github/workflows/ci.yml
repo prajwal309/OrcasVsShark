@@ -3,6 +3,22 @@ on: [push, pull_request]
 jobs:
   local-game:
     runs-on: ubuntu-latest
+    env:
+      TEST_POSTGRES_URL: postgresql://orcas:orcas@127.0.0.1:5432/orcas_test
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: orcas
+          POSTGRES_PASSWORD: orcas
+          POSTGRES_DB: orcas_test
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U orcas -d orcas_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

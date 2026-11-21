@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { createHash } from "node:crypto";
 import { afterEach, expect, it, vi } from "vitest";
-import { beginGoogle, googleSubject } from "@/lib/auth/google";
+import { beginGoogle, googleIdentity } from "@/lib/auth/google";
 
 const config = {
   clientId: "local-test-id",
@@ -15,7 +15,7 @@ it("creates fresh state and binds the Google authorization code to its PKCE veri
   const attempt = beginGoogle(config);
   const url = new URL(attempt.url);
   expect(url.origin).toBe("https://accounts.google.com");
-  expect(url.searchParams.get("scope")).toBe("openid");
+  expect(url.searchParams.get("scope")).toBe("openid email");
   expect(url.searchParams.get("state")).toBe(attempt.state);
   expect(url.searchParams.get("code_challenge")).toBe(
     createHash("sha256").update(attempt.verifier).digest("base64url"),
@@ -28,11 +28,20 @@ it("gets the stable Google subject through the server-side code exchange", async
   const fetchGoogle = vi
     .fn()
     .mockResolvedValueOnce(Response.json({ access_token: "provider-token" }))
-    .mockResolvedValueOnce(Response.json({ sub: "stable-account-id" }));
+    .mockResolvedValueOnce(
+      Response.json({
+        sub: "stable-account-id",
+        email: "user@example.test",
+        email_verified: true,
+      }),
+    );
   vi.stubGlobal("fetch", fetchGoogle);
-  await expect(googleSubject(config, "code", "verifier")).resolves.toBe(
-    "stable-account-id",
-  );
+  await expect(
+    googleIdentity(config, "code", "verifier"),
+  ).resolves.toMatchObject({
+    sub: "stable-account-id",
+    email: "user@example.test",
+  });
   const [tokenUrl, tokenRequest] = fetchGoogle.mock.calls[0];
   expect(tokenUrl).toBe("https://oauth2.googleapis.com/token");
   expect(tokenRequest.body.get("code_verifier")).toBe("verifier");

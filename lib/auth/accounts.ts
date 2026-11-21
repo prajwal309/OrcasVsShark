@@ -8,6 +8,12 @@ export const usernameSchema = z
   .trim()
   .toLowerCase()
   .regex(/^[a-z0-9_]{3,24}$/, "Use 3–24 letters, digits, or underscores.");
+export const emailSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .max(254)
+  .pipe(z.email());
 export const invitationSchema = z.string().regex(/^[a-f0-9]{64}$/);
 
 export const signupCodeRequired = () =>
@@ -21,49 +27,63 @@ export function invalidInvitation() {
   );
 }
 
-export function createAccount(
+export async function createAccount(
   db: SqlClient,
   username: string,
+  email: string,
   invitationHash: string | undefined,
   credential: { passwordHash: string } | { googleSubject: string },
 ) {
   if (invitationHash) {
-    const invitation = db.query(
+    const invitation = await db.query(
       `DELETE FROM account_invites WHERE token_hash = $1
-     AND reset_account IS NULL AND expires_at > unixepoch('subsec')`,
+     AND reset_account IS NULL AND expires_at > EXTRACT(EPOCH FROM clock_timestamp())`,
       [invitationHash],
     );
     if (!invitation.rowCount) throw invalidInvitation();
   }
 
   const id = randomUUID();
-  const inserted = db.query(
-    `INSERT INTO accounts (id, username, password_hash, google_subject)
-     VALUES ($1, $2, $3, $4) ON CONFLICT (username) DO NOTHING`,
+  const inserted = await db.query(
+    `INSERT INTO accounts (id, username, email, password_hash, google_subject)
+     VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING`,
     [
       id,
       username,
+      email,
       "passwordHash" in credential ? credential.passwordHash : null,
       "googleSubject" in credential ? credential.googleSubject : null,
     ],
   );
-  if (!inserted.rowCount)
+  if (!inserted.rowCount) {
+    const taken = await db.accounts.findUnique({
+      where: { username },
+      select: { id: true },
+    });
+    if (!taken)
+      throw new RoomError(
+        409,
+        "EMAIL_TAKEN",
+        "Could not create an account with that email address.",
+      );
     throw new RoomError(
       409,
       "USERNAME_TAKEN",
       "An account already uses that username. Sign in or choose a different username.",
     );
+  }
   return id;
 }
 
-export function googleAccount(
+export async function googleAccount(
   db: SqlClient,
   subject: string,
+  email: string,
   signup?: { username: string; invitationHash: string },
 ) {
   const {
     rows: [existing],
-  } = db.query<{ id: string }>(
+  } = await db.query<{ id: string }>(
     "SELECT id FROM accounts WHERE google_subject = $1",
     [subject],
   );
@@ -74,7 +94,7 @@ export function googleAccount(
       "GOOGLE_SIGNUP_REQUIRED",
       "Create an account with a signup code to use this Google account.",
     );
-  return createAccount(db, signup.username, signup.invitationHash, {
+  return createAccount(db, signup.username, email, signup.invitationHash, {
     googleSubject: subject,
   });
 }

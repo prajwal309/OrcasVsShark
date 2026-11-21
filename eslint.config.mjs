@@ -10,6 +10,7 @@ const eslintConfig = defineConfig([
     // Default ignores of eslint-config-next:
     ".next/**",
     ".next-online/**",
+    "lib/database/generated/**",
     "out/**",
     "build/**",
     ".cache/**",

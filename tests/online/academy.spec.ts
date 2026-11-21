@@ -16,7 +16,13 @@ test("account progress synchronizes to a new browser without merging guest progr
   const password = "learning password";
   const registration = await page.request.post("/api/account", {
     headers,
-    data: { action: "register", username, password, confirmPassword: password },
+    data: {
+      action: "register",
+      username,
+      email: username + "@example.test",
+      password,
+      confirmPassword: password,
+    },
   });
   expect(registration.ok()).toBe(true);
   await page.goto("/learn?section=progress");

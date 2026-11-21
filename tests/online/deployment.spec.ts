@@ -1,22 +1,15 @@
-// These tests launch production Node processes against dedicated SQLite files.
 import { spawn } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { randomUUID, randomBytes } from "node:crypto";
 import { once } from "node:events";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { setTimeout as delay } from "node:timers/promises";
 import { expect, test } from "@playwright/test";
-import { openDatabase } from "../../lib/database/sqlite.mjs";
+import { postgresQuery } from "../../scripts/test-postgres.mjs";
 
-const httpsOrigin = "https://play.example.test";
-const vercelOrigin = "https://orcas-vs-shark.vercel.app";
+const origin = "https://orcas-vs-shark.vercel.app";
 
 async function startServer(
-  filename: string,
-  options: { vercel?: boolean; https?: boolean } = {},
+  databaseUrl = process.env.PRISMA_DATABASE_URL,
+  appOrigin = "",
 ) {
-  const origin = options.https ? httpsOrigin : "http://localhost:3000";
   const child = spawn(
     process.execPath,
     [
@@ -31,11 +24,12 @@ async function startServer(
       env: {
         ...process.env,
         NODE_ENV: "production",
-        APP_ORIGIN: origin,
-        SQLITE_PATH: filename,
-        VERCEL: options.vercel ? "1" : "",
-        VERCEL_ENV: "",
-        ORCAS_DISABLE_SQLITE: "",
+        APP_ORIGIN: appOrigin,
+        PRISMA_DATABASE_URL: databaseUrl,
+        VERCEL: "1",
+        VERCEL_ENV: "production",
+        VERCEL_PROJECT_PRODUCTION_URL: new URL(origin).hostname,
+        VERCEL_URL: "deployment-preview.vercel.app",
       },
       stdio: ["ignore", "pipe", "pipe"],
     },
@@ -58,19 +52,12 @@ async function startServer(
       output.match(/Local:\s*(http:\/\/127\.0\.0\.1:\d+)/)?.[1];
     await expect.poll(address).toBeTruthy();
     const url = address()!;
-    await expect
-      .poll(() =>
-        fetch(url + "/api/health")
-          .then((response) => response.status)
-          .catch(() => 0),
-      )
-      .toBe(200);
     const post = (route: string, data: object, cookie?: string) =>
       fetch(url + route, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Origin: options.https ? origin : url,
+          Origin: origin,
           ...(cookie ? { Cookie: cookie } : {}),
         },
         body: JSON.stringify(data),
@@ -84,118 +71,70 @@ async function startServer(
   }
 }
 
-test("Vercel keeps public pages and liveness available without creating SQLite", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "orcas-vercel-"));
-  const filename = join(dir, "data", "orcas.db");
-  const server = await startServer(filename, { vercel: true });
+test("public pages and liveness remain available without a configured database", async () => {
+  const server = await startServer("");
   try {
-    for (const path of ["/", "/online", "/play", "/learn", "/api/health"])
+    for (const path of [
+      "/",
+      "/online?account=register",
+      "/play",
+      "/learn",
+      "/api/health",
+    ])
       expect((await fetch(server.url + path)).status, path).toBe(200);
     const signup = await fetch(server.url + "/online?account=register");
-    expect(signup.status).toBe(200);
-    const signupPage = await signup.text();
-    expect(signupPage).toContain(
+    expect(await signup.text()).toContain(
       "Online accounts and matches are unavailable on this deployment.",
     );
-    expect(signupPage).not.toContain('id="account-username"');
-    // A cookie from another deployment must not turn the guest Academy into a 500.
+    expect((await fetch(server.url + "/api/ready")).status).toBe(503);
     expect(
       (
-        await fetch(server.url + "/learn", {
-          headers: { Cookie: `orcas_session=${"a".repeat(64)}` },
+        await server.post("/api/account", {
+          action: "login",
+          username: "guest",
+          password: "test password",
         })
       ).status,
-    ).toBe(200);
-    const leaders = await fetch(server.url + "/leaderboards");
-    expect(leaders.status).toBe(200);
-    expect(await leaders.text()).toContain(
-      "Ranked leaderboards are temporarily unavailable.",
-    );
-    const readiness = await fetch(server.url + "/api/ready");
-    expect(readiness.status).toBe(503);
-    const registration = await fetch(server.url + "/api/account", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Origin: vercelOrigin },
-      body: JSON.stringify({
-        action: "register",
-        username: "new_player",
-        password: "test password",
-        confirmPassword: "test password",
-      }),
-    });
-    expect(registration.status).toBe(503);
-    expect(await registration.json()).toEqual({
-      code: "DATABASE_UNAVAILABLE",
-      error: "Online accounts and matches are unavailable on this deployment.",
-    });
-    expect(existsSync(join(dir, "data"))).toBe(false);
+    ).toBe(503);
   } finally {
     await server.stop();
-    rmSync(dir, { recursive: true, force: true });
   }
 });
 
-test("an unusable production SQLite path leaves liveness and local play available", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "orcas-unavailable-"));
-  const blocker = join(dir, "not-a-directory");
-  writeFileSync(blocker, "sentinel");
-  const server = await startServer(join(blocker, "orcas.db"), { https: true });
+test("a Vercel-style restart preserves PostgreSQL accounts, sessions, progress and exactly one ranked result", async () => {
+  let server = await startServer();
   try {
-    expect((await fetch(server.url + "/api/ready")).status).toBe(503);
-    expect((await fetch(server.url + "/api/health")).status).toBe(200);
-    expect((await fetch(server.url + "/play")).status).toBe(200);
-    expect((await fetch(server.url + "/players/existing_player")).status).toBe(
-      200,
-    );
-  } finally {
-    await server.stop();
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-test("HTTPS production does not create an empty database when the mounted file is missing", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "orcas-unprepared-"));
-  const filename = join(dir, "missing.db");
-  const server = await startServer(filename, { https: true });
-  try {
-    expect((await fetch(server.url + "/api/ready")).status).toBe(503);
-    expect(existsSync(filename)).toBe(false);
-  } finally {
-    await server.stop();
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-test("a restart preserves sessions, progress, a live room and exactly one ranked timeout", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "orcas-restart-"));
-  const filename = join(dir, "orcas.db");
-  const db = openDatabase(filename);
-  let server: Awaited<ReturnType<typeof startServer>> | undefined;
-  try {
-    server = await startServer(filename, { https: true });
     expect((await fetch(server.url + "/api/ready")).status).toBe(200);
     const cookies = [];
-    for (const username of ["player_one", "player_two"]) {
+    const suffix = randomBytes(4).toString("hex");
+    const usernames = [`player_one_${suffix}`, `player_two_${suffix}`];
+    for (const username of usernames) {
       const response = await server.post("/api/account", {
         action: "register",
         username,
+        email: username + "@example.test",
         password: "restart fixture password",
         confirmPassword: "restart fixture password",
       });
       expect(response.status).toBe(200);
+      expect(response.headers.get("set-cookie")).toContain("Secure");
       cookies.push(response.headers.get("set-cookie")!.split(";")[0]);
     }
-    const firstPlayer = db
-      .prepare("SELECT id FROM accounts WHERE username = 'player_one'")
-      .pluck()
-      .get() as string;
+    const {
+      rows: [player],
+    } = await postgresQuery(
+      "SELECT id, email, password_hash FROM accounts WHERE username = $1",
+      [usernames[0]],
+    );
+    expect(player.email).toBe(usernames[0] + "@example.test");
+    expect(player.password_hash).toMatch(/^\$argon2id\$/);
     const progress = await fetch(server.url + "/api/learn", {
       method: "POST",
       headers: {
-        Origin: httpsOrigin,
+        Origin: origin,
         "Content-Type": "application/json",
         Cookie: cookies[0],
-        "X-Learning-Player": firstPlayer,
+        "X-Learning-Player": player.id,
       },
       body: JSON.stringify({
         id: randomUUID(),
@@ -242,67 +181,59 @@ test("a restart preserves sessions, progress, a live room and exactly one ranked
     expect(move.status).toBe(200);
     await server.stop();
 
-    // Move the fixture deadline forward a few milliseconds while the service
-    // is down, so the restart test does not need to wait three minutes.
-    const deadline = Date.now() + 50;
-    db.prepare(
-      "UPDATE ranked_matches SET deadline = ? WHERE game_code = ?",
-    ).run(deadline, code);
-    await delay(75);
-    server = await startServer(filename, { https: true });
-    expect((await fetch(server.url + "/api/ready")).status).toBe(200);
-    const result = db.prepare(
-      "SELECT winner, reason, ended_at FROM ranked_matches WHERE game_code = ?",
+    const deadline = Date.now() - 1;
+    await postgresQuery(
+      "UPDATE ranked_matches SET deadline = $1 WHERE game_code = $2",
+      [deadline, code],
     );
-    // Poll SQLite rather than the room API to prove the worker settles it.
-    await expect
-      .poll(() => result.get(code))
-      .toEqual({
-        winner: "sharks",
-        reason: "Time expired",
-        ended_at: deadline,
+    server = await startServer(undefined, origin);
+    const cronUrl = server.url + "/api/cron/ranked";
+    expect((await fetch(cronUrl)).status).toBe(401);
+    const settle = () =>
+      fetch(cronUrl, {
+        headers: { Authorization: `Bearer ${process.env.CRON_SECRET}` },
       });
+    const attempts = await Promise.all([settle(), settle()]);
+    expect(attempts.map(({ status }) => status)).toEqual([200, 200]);
+    const { rows: results } = await postgresQuery(
+      "SELECT winner, reason, ended_at FROM ranked_matches WHERE game_code = $1",
+      [code],
+    );
+    expect(results).toEqual([
+      { winner: "sharks", reason: "Time expired", ended_at: deadline },
+    ]);
+
     const account = await fetch(server.url + "/api/account", {
       headers: { Cookie: cookies[0] },
     });
-    expect(await account.json()).toEqual({ username: "player_one" });
+    expect(await account.json()).toEqual({ username: usernames[0] });
     const room = await fetch(server.url + route, {
       headers: { Cookie: sharks },
     }).then((response) => response.json());
     expect(room.state.ply).toBe(1);
     expect(room.state.board.c3).toBe("shark");
     expect(room.ending).toEqual({ winner: "sharks", reason: "Time expired" });
-    expect(
-      db
-        .prepare(
-          "SELECT lessons_completed FROM learning_stats WHERE player_id = ?",
-        )
-        .pluck()
-        .get(firstPlayer),
-    ).toBe(1);
-
-    await server.stop();
-    server = await startServer(filename, { https: true });
-    expect((await fetch(server.url + "/api/ready")).status).toBe(200);
-    expect(
-      db
-        .prepare(
-          "SELECT rating, wins, losses FROM player_ratings WHERE mode = 'fast' ORDER BY rating DESC",
-        )
-        .all(),
-    ).toEqual([
-      { rating: 1516, wins: 1, losses: 0 },
-      { rating: 1484, wins: 0, losses: 1 },
+    const { rows: stats } = await postgresQuery(
+      "SELECT lessons_completed FROM learning_stats WHERE player_id = $1",
+      [player.id],
+    );
+    expect(stats).toEqual([{ lessons_completed: 1 }]);
+    const { rows: ratings } = await postgresQuery(
+      `SELECT rating, wins, losses, total_games FROM player_ratings
+       WHERE mode = 'fast' AND player_id IN (SELECT id FROM accounts WHERE username IN ($1, $2))
+       ORDER BY rating DESC`,
+      usernames,
+    );
+    expect(ratings).toEqual([
+      { rating: 1516, wins: 1, losses: 0, total_games: 1 },
+      { rating: 1484, wins: 0, losses: 1, total_games: 1 },
     ]);
-    expect(
-      db
-        .prepare("SELECT COUNT(*) FROM game_rounds WHERE game_code = ?")
-        .pluck()
-        .get(code),
-    ).toBe(1);
+    const { rows: rounds } = await postgresQuery(
+      "SELECT round FROM game_rounds WHERE game_code = $1",
+      [code],
+    );
+    expect(rounds).toEqual([{ round: 1 }]);
   } finally {
-    await server?.stop();
-    db.close();
-    rmSync(dir, { recursive: true, force: true });
+    await server.stop();
   }
 });

@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { randomUUID } from "node:crypto";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { sqlClient } from "@/lib/database/connection";
-import { openDatabase } from "@/lib/database/sqlite.mjs";
+import { beforeEach, describe, expect, it } from "vitest";
+import { database, sqlClient, transaction } from "@/lib/database/connection";
+import { setupPostgres } from "../fixtures/postgres";
 import { acknowledgeMatch, updateQueue } from "@/lib/multiplayer/matchmaking";
 import {
   leaderboard,
@@ -83,26 +83,28 @@ it("implements all three time controls, increments, and an absolute deadline", (
   ]);
 });
 
-describe("ranked SQLite games", () => {
-  let storage: ReturnType<typeof openDatabase>;
+setupPostgres();
+
+describe("ranked PostgreSQL games", () => {
   let db: ReturnType<typeof sqlClient>;
-  const tx = <T>(work: () => T) => storage.transaction(work).immediate();
-  beforeEach(() => {
-    storage = openDatabase(":memory:");
-    db = sqlClient(storage);
+  const tx = transaction;
+  beforeEach(async () => {
+    db = sqlClient(database());
+    await db.query("TRUNCATE accounts CASCADE");
     for (const player of ["alpha", "bravo", "charlie", "delta"])
-      db.query(
-        "INSERT INTO accounts (id, username, password_hash) VALUES ($1, $1, 'fixture')",
+      await db.query(
+        "INSERT INTO accounts (id, username, email, password_hash) VALUES ($1, $1, $1 || '@example.test', 'fixture')",
         [player],
       );
   });
-  afterEach(() => storage.close());
 
-  function pair(mode: "fast" | "medium" | "classic" = "fast") {
-    tx(() => updateQueue(db, "alpha", "enter", mode, base));
-    const search = tx(() => updateQueue(db, "bravo", "enter", mode, base));
+  async function pair(mode: "fast" | "medium" | "classic" = "fast") {
+    await tx((db) => updateQueue(db, "alpha", "enter", mode, base));
+    const search = await tx((db) =>
+      updateQueue(db, "bravo", "enter", mode, base),
+    );
     if (search.status !== "matched") throw new Error("Expected a match");
-    const match = rankedMatch(db, search.code);
+    const match = await rankedMatch(db, search.code);
     return {
       code: search.code,
       orcas: match.orcas_id,
@@ -110,8 +112,8 @@ describe("ranked SQLite games", () => {
     };
   }
 
-  it("seeds each mode and pairs only with a nearby player seeking the same mode", () => {
-    expect(playerProfile(db, "alpha")?.ratings).toEqual(
+  it("seeds each mode and pairs only with a nearby player seeking the same mode", async () => {
+    expect((await playerProfile(db, "alpha"))?.ratings).toEqual(
       expect.arrayContaining(
         rankedModes.map((mode) => ({
           mode,
@@ -119,79 +121,95 @@ describe("ranked SQLite games", () => {
           wins: 0,
           losses: 0,
           draws: 0,
+          total_games: 0,
         })),
       ),
     );
-    db.query(
+    await db.query(
       "UPDATE player_ratings SET rating = 1650 WHERE player_id = 'bravo' AND mode = 'fast'",
     );
-    expect(tx(() => updateQueue(db, "alpha", "enter", "fast", base))).toEqual({
+    expect(
+      await tx((db) => updateQueue(db, "alpha", "enter", "fast", base)),
+    ).toEqual({
       status: "waiting",
       mode: "fast",
     });
     expect(
-      tx(() => updateQueue(db, "charlie", "enter", "classic", base)),
+      await tx((db) => updateQueue(db, "charlie", "enter", "classic", base)),
     ).toEqual({ status: "waiting", mode: "classic" });
     expect(
-      tx(() => updateQueue(db, "bravo", "enter", "fast", base + 1000)),
+      await tx((db) => updateQueue(db, "bravo", "enter", "fast", base + 1000)),
     ).toEqual({ status: "waiting", mode: "fast" });
     expect(
-      tx(() => updateQueue(db, "bravo", "status", undefined, base + 9000))
-        .status,
+      (
+        await tx((db) =>
+          updateQueue(db, "bravo", "status", undefined, base + 9000),
+        )
+      ).status,
     ).toBe("waiting");
     expect(
-      tx(() => updateQueue(db, "alpha", "status", undefined, base + 10_000))
-        .status,
+      (
+        await tx((db) =>
+          updateQueue(db, "alpha", "status", undefined, base + 10_000),
+        )
+      ).status,
     ).toBe("waiting");
-    const found = tx(() =>
+    const found = await tx((db) =>
       updateQueue(db, "bravo", "status", undefined, base + 11_000),
     );
     expect(found).toMatchObject({ status: "matched", mode: "fast" });
     if (found.status !== "matched") throw new Error("Expected a match");
-    tx(() => acknowledgeMatch(db, "alpha", found.code));
+    await tx((db) => acknowledgeMatch(db, "alpha", found.code));
     expect(
-      tx(() => updateQueue(db, "alpha", "enter", "medium", base + 12_000)),
+      await tx((db) =>
+        updateQueue(db, "alpha", "enter", "medium", base + 12_000),
+      ),
     ).toEqual(found);
     expect(
-      tx(() => updateQueue(db, "charlie", "cancel", undefined, base + 12_000)),
+      await tx((db) =>
+        updateQueue(db, "charlie", "cancel", undefined, base + 12_000),
+      ),
     ).toEqual({ status: "idle" });
     expect(
-      db.query("SELECT COUNT(*) AS count FROM ranked_matches").rows[0],
+      (await db.query("SELECT COUNT(*)::int AS count FROM ranked_matches"))
+        .rows[0],
     ).toEqual({ count: 1 });
   });
 
-  it("prefers the nearest eligible rating and ignores expired entries", () => {
-    db.query(
+  it("prefers the nearest eligible rating and ignores expired entries", async () => {
+    await db.query(
       "UPDATE player_ratings SET rating = 1400 WHERE player_id = 'alpha' AND mode = 'fast'",
     );
-    db.query(
+    await db.query(
       "UPDATE player_ratings SET rating = 1550 WHERE player_id = 'bravo' AND mode = 'fast'",
     );
-    tx(() => updateQueue(db, "delta", "enter", "fast", base - 30_000));
-    tx(() => updateQueue(db, "alpha", "enter", "fast", base));
-    tx(() => updateQueue(db, "bravo", "enter", "fast", base + 1000));
-    const found = tx(() =>
+    await tx((db) => updateQueue(db, "delta", "enter", "fast", base - 30_000));
+    await tx((db) => updateQueue(db, "alpha", "enter", "fast", base));
+    await tx((db) => updateQueue(db, "bravo", "enter", "fast", base + 1000));
+    const found = await tx((db) =>
       updateQueue(db, "charlie", "enter", "fast", base + 1500),
     );
     if (found.status !== "matched")
       throw new Error("Expected the closest match");
-    const match = rankedMatch(db, found.code);
+    const match = await rankedMatch(db, found.code);
     expect([match.orcas_id, match.sharks_id].sort()).toEqual([
       "bravo",
       "charlie",
     ]);
     expect(
-      db.query(
-        "SELECT account_id FROM matchmaking_queue WHERE account_id = 'delta'",
+      (
+        await db.query(
+          "SELECT account_id FROM matchmaking_queue WHERE account_id = 'delta'",
+        )
       ).rowCount,
     ).toBe(0);
   });
 
-  it("increments only a committed move, keeps clocks running through disconnect and settles a draw once", () => {
-    const { code, orcas, sharks } = pair();
-    const initial = tx(() => readRoom(db, code, sharks, base + 1500));
-    expect(() =>
-      tx(() =>
+  it("increments only a committed move, keeps clocks running through disconnect and settles a draw once", async () => {
+    const { code, orcas, sharks } = await pair();
+    const initial = await tx((db) => readRoom(db, code, sharks, base + 1500));
+    await expect(
+      tx((db) =>
         changeRoom(
           db,
           code,
@@ -203,17 +221,19 @@ describe("ranked SQLite games", () => {
           base + 1500,
         ),
       ),
-    ).toThrow(/not legal/);
+    ).rejects.toThrow(/not legal/);
     const first = action(initial, {
       kind: "move",
       move: { kind: "place", to: "c3" },
     });
-    const placed = tx(() => changeRoom(db, code, sharks, first, base + 1500));
+    const placed = await tx((db) =>
+      changeRoom(db, code, sharks, first, base + 1500),
+    );
     expect(placed.ranked?.remaining).toEqual({
       sharks: 183_500,
       orcas: 180_000,
     });
-    const returned = tx(() =>
+    const returned = await tx((db) =>
       changeRoom(db, code, sharks, first, base + 10_000),
     );
     expect(returned.ranked?.remaining).toEqual({
@@ -222,7 +242,7 @@ describe("ranked SQLite games", () => {
     });
     expect(returned.state.ply).toBe(1);
     expect(returned.opponentOnline).toBe(false);
-    const offered = tx(() =>
+    const offered = await tx((db) =>
       changeRoom(
         db,
         code,
@@ -233,30 +253,33 @@ describe("ranked SQLite games", () => {
     );
     expect(offered.ranked?.remaining.orcas).toBe(167_500);
     const draw = action(offered, { kind: "accept-draw" });
-    const finished = tx(() =>
+    const finished = await tx((db) =>
       changeRoom(db, code, sharks, draw, base + 15_000),
     );
     expect(finished.ranked?.remaining.orcas).toBe(166_500);
     expect(finished.ending?.winner).toBe("draw");
     expect(
-      tx(() => changeRoom(db, code, sharks, draw, base + 16_000)).ranked
-        ?.remaining,
+      (await tx((db) => changeRoom(db, code, sharks, draw, base + 16_000)))
+        .ranked?.remaining,
     ).toEqual(finished.ranked?.remaining);
     expect(
-      leaderboard(db, "fast").map(({ rating, draws }) => [rating, draws]),
+      (await leaderboard(db, "fast")).map(({ rating, draws }) => [
+        rating,
+        draws,
+      ]),
     ).toEqual([
       [1500, 1],
       [1500, 1],
     ]);
-    expect(leaderboard(db, "medium")).toEqual([]);
-    expect(playerProfile(db, orcas)?.history[0]).toMatchObject({
+    expect(await leaderboard(db, "medium")).toEqual([]);
+    expect((await playerProfile(db, orcas))?.history[0]).toMatchObject({
       opponent: sharks,
       mode: "fast",
       result: "Draw",
       delta: 0,
     });
-    expect(() =>
-      tx(() =>
+    await expect(
+      tx((db) =>
         changeRoom(
           db,
           code,
@@ -265,15 +288,15 @@ describe("ranked SQLite games", () => {
           base + 16_000,
         ),
       ),
-    ).toThrow(/Return to the lobby/);
+    ).rejects.toThrow(/Return to the lobby/);
   });
 
-  it("settles an unattended timeout once and rejects a move submitted at the deadline", () => {
-    const { code, orcas, sharks } = pair("medium");
-    const before = tx(() => readRoom(db, code, sharks, base + 299_999));
+  it("settles an unattended timeout once and rejects a move submitted at the deadline", async () => {
+    const { code, orcas, sharks } = await pair("medium");
+    const before = await tx((db) => readRoom(db, code, sharks, base + 299_999));
     expect(before.ranked?.remaining.sharks).toBe(1);
-    expect(() =>
-      tx(() =>
+    await expect(
+      tx((db) =>
         changeRoom(
           db,
           code,
@@ -282,8 +305,8 @@ describe("ranked SQLite games", () => {
           base + 300_000,
         ),
       ),
-    ).toThrow(/seat/);
-    const result = tx(() =>
+    ).rejects.toThrow(/seat/);
+    const result = await tx((db) =>
       changeRoom(
         db,
         code,
@@ -295,42 +318,49 @@ describe("ranked SQLite games", () => {
     expect(result.ending).toEqual({ winner: "orcas", reason: "Time expired" });
     expect(result.state.ply).toBe(0);
     expect(result.ranked?.remaining.sharks).toBe(0);
-    tx(() => expireRankedRoom(db, code, base + 301_000));
+    await tx((db) => expireRankedRoom(db, code, base + 301_000));
     expect(
-      leaderboard(db, "medium").map(({ username, rating, wins, losses }) => [
-        username,
-        rating,
-        wins,
-        losses,
-      ]),
+      (await leaderboard(db, "medium")).map(
+        ({ username, rating, wins, losses }) => [
+          username,
+          rating,
+          wins,
+          losses,
+        ],
+      ),
     ).toEqual([
       [orcas, 1516, 1, 0],
       [sharks, 1484, 0, 1],
     ]);
-    expect(leaderboard(db, "fast")).toEqual([]);
+    expect(await leaderboard(db, "fast")).toEqual([]);
     expect(
-      db.query("SELECT code FROM games WHERE status = 'finished'").rows,
+      (await db.query("SELECT code FROM games WHERE status = 'finished'")).rows,
     ).toEqual([{ code }]);
-    expect(db.query("SELECT game_code FROM game_rounds").rows).toEqual([
+    expect((await db.query("SELECT game_code FROM game_rounds")).rows).toEqual([
       { game_code: code },
     ]);
   });
 
-  it("finalizes a clock without a connected browser and records a separate rules victory", () => {
-    const unattended = pair("classic");
-    tx(() => expireRankedRoom(db, unattended.code, base + 600_000));
+  it("finalizes a clock without a connected browser and records a separate rules victory", async () => {
+    const unattended = await pair("classic");
+    await tx((db) => expireRankedRoom(db, unattended.code, base + 600_000));
     expect(
-      tx(() => readRoom(db, unattended.code, unattended.orcas, base + 600_500))
-        .ending?.reason,
+      (
+        await tx((db) =>
+          readRoom(db, unattended.code, unattended.orcas, base + 600_500),
+        )
+      ).ending?.reason,
     ).toBe("Time expired");
-    tx(() => acknowledgeMatch(db, "alpha", unattended.code));
-    tx(() => acknowledgeMatch(db, "bravo", unattended.code));
-    const ranked = pair("fast");
-    let room = tx(() => readRoom(db, ranked.code, ranked.orcas, base + 100));
+    await tx((db) => acknowledgeMatch(db, "alpha", unattended.code));
+    await tx((db) => acknowledgeMatch(db, "bravo", unattended.code));
+    const ranked = await pair("fast");
+    let room = await tx((db) =>
+      readRoom(db, ranked.code, ranked.orcas, base + 100),
+    );
     for (const [index, move] of (victories.sharks as Move[]).entries()) {
       const player =
         room.state.turn === "sharks" ? ranked.sharks : ranked.orcas;
-      room = tx(() =>
+      room = await tx((db) =>
         changeRoom(
           db,
           ranked.code,
@@ -341,12 +371,12 @@ describe("ranked SQLite games", () => {
       );
     }
     expect(room.ending?.winner).toBe("sharks");
-    expect(leaderboard(db, "fast")[0]).toMatchObject({
+    expect((await leaderboard(db, "fast"))[0]).toMatchObject({
       username: ranked.sharks,
       rating: 1516,
       wins: 1,
     });
-    expect(leaderboard(db, "classic")[0]).toMatchObject({
+    expect((await leaderboard(db, "classic"))[0]).toMatchObject({
       username: unattended.orcas,
       rating: 1516,
       wins: 1,

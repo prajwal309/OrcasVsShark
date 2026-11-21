@@ -9,9 +9,9 @@ export async function GET(request: Request, context: Context) {
   return respond(async () => {
     const actor = await actorFor(request, "read", 120);
     const code = roomCodeSchema.parse((await context.params).gameId);
-    return transaction((db) => {
-      const room = readRoom(db, code, actor);
-      acknowledgeMatch(db, actor, code);
+    return transaction(async (db) => {
+      const room = await readRoom(db, code, actor);
+      await acknowledgeMatch(db, actor, code);
       return room;
     });
   });

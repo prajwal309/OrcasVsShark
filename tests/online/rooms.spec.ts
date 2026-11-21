@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { openDatabase } from "../../lib/database/sqlite.mjs";
+import { postgresQuery } from "../../scripts/test-postgres.mjs";
 import { test, expect, type Page } from "@playwright/test";
 import type { RoomRequest, RoomView } from "../../lib/multiplayer/protocol";
 import type { Move } from "../../lib/game/types";
@@ -32,43 +32,27 @@ const password = "a test-only long password";
 
 const origin = "http://127.0.0.1:3100";
 
-function withDatabase<T>(work: (db: ReturnType<typeof openDatabase>) => T): T {
-  if (!process.env.SQLITE_PATH) throw new Error("Run npm run test:online.");
-  const db = openDatabase(process.env.SQLITE_PATH);
-  try {
-    return work(db);
-  } finally {
-    db.close();
-  }
-}
-
-function issueResetCode(username: string) {
+async function issueResetCode(username: string) {
   const token = randomBytes(32).toString("hex");
-  withDatabase((db) =>
-    db
-      .prepare(
-        `INSERT INTO account_invites
-     SELECT ?, unixepoch('subsec') + 3600, id FROM accounts WHERE username = ?`,
-      )
-      .run(createHash("sha256").update(token).digest("hex"), username),
+  await postgresQuery(
+    `INSERT INTO account_invites
+     SELECT $1, EXTRACT(EPOCH FROM clock_timestamp()) + 3600, id FROM accounts WHERE username = $2`,
+    [createHash("sha256").update(token).digest("hex"), username],
   );
   return token;
 }
 
-function issueSignupCode() {
+async function issueSignupCode() {
   const token = randomBytes(32).toString("hex");
-  withDatabase((db) =>
-    db
-      .prepare(
-        "INSERT INTO account_invites VALUES (?, unixepoch('subsec') + 3600, NULL)",
-      )
-      .run(createHash("sha256").update(token).digest("hex")),
+  await postgresQuery(
+    "INSERT INTO account_invites VALUES ($1, EXTRACT(EPOCH FROM clock_timestamp()) + 3600, NULL)",
+    [createHash("sha256").update(token).digest("hex")],
   );
   return token;
 }
 
-test.beforeEach(() => {
-  withDatabase((db) => db.prepare("DELETE FROM account_rate_limits").run());
+test.beforeEach(async () => {
+  await postgresQuery("DELETE FROM account_rate_limits");
 });
 
 async function register(page: Page) {
@@ -79,6 +63,7 @@ async function register(page: Page) {
     page.getByRole("heading", { name: "Create a player account" }),
   ).toBeVisible();
   await page.getByLabel("Username").fill(username);
+  await page.getByLabel("Email address").fill(username + "@example.test");
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByLabel("Confirm password").fill(password);
   await page.getByRole("button", { name: "Create account" }).click();
@@ -419,7 +404,7 @@ test("a player can reclaim a seat and password reset revokes old sessions", asyn
       returning.getByText("Waiting for opponent", { exact: true }),
     ).toBeVisible();
 
-    const reset = issueResetCode(username);
+    const reset = await issueResetCode(username);
     await returning.goto("/online");
     await returning.getByRole("button", { name: "Sign out" }).click();
     await returning
@@ -519,6 +504,9 @@ test("signup reports mismatched passwords and an existing username", async ({
       joining.getByRole("heading", { name: "Create a player account" }),
     ).toBeVisible();
     await joining.getByLabel("Username").fill(username.toUpperCase());
+    await joining
+      .getByLabel("Email address")
+      .fill("unused_" + username + "@example.test");
     await joining.getByLabel("Password", { exact: true }).fill(password);
     await joining.getByLabel("Confirm password").fill("a different password");
     await joining
@@ -556,7 +544,12 @@ test("login keeps credentials server-side and rotates, expires, and revokes sess
   const secret = "8charPwd";
   const headers = { Origin: origin };
   try {
-    const form = { action: "register", username, password: secret };
+    const form = {
+      action: "register",
+      username,
+      email: username + "@example.test",
+      password: secret,
+    };
     const response = await context.request.post("/api/account", {
       headers,
       data: { ...form, password: "short", confirmPassword: "short" },
@@ -582,17 +575,28 @@ test("login keeps credentials server-side and rotates, expires, and revokes sess
     const registeredHash = createHash("sha256")
       .update(registered.value)
       .digest("hex");
-    const session = withDatabase((db) =>
-      db
-        .prepare(
-          "SELECT s.token_hash, a.password_hash FROM account_sessions s JOIN accounts a ON a.id = s.account_id WHERE a.username = ?",
-        )
-        .get(username),
+    const {
+      rows: [session],
+    } = await postgresQuery(
+      "SELECT s.token_hash, a.email, a.password_hash FROM account_sessions s JOIN accounts a ON a.id = s.account_id WHERE a.username = $1",
+      [username],
     );
     expect(session).toEqual({
       token_hash: registeredHash,
-      password_hash: expect.stringMatching(/^[a-f0-9]{32}:[a-f0-9]{128}$/),
+      email: form.email,
+      password_hash: expect.stringMatching(/^\$argon2id\$/),
     });
+    const duplicate = await request.post("/api/account", {
+      headers,
+      data: {
+        ...form,
+        username: "duplicate_" + username.slice(-8),
+        email: form.email.toUpperCase(),
+        confirmPassword: secret,
+      },
+    });
+    expect(duplicate.status()).toBe(409);
+    expect((await duplicate.json()).code).toBe("EMAIL_TAKEN");
 
     const login = { action: "login", username, password: secret };
     const wrongPassword = await request.post("/api/account", {
@@ -640,12 +644,9 @@ test("login keeps credentials server-side and rotates, expires, and revokes sess
     );
 
     const hash = createHash("sha256").update(current.value).digest("hex");
-    withDatabase((db) =>
-      db
-        .prepare(
-          "UPDATE account_sessions SET expires_at = 0 WHERE token_hash = ?",
-        )
-        .run(hash),
+    await postgresQuery(
+      "UPDATE account_sessions SET expires_at = 0 WHERE token_hash = $1",
+      [hash],
     );
     expect(await accountFromToken(current.value)).toEqual({ username: null });
     await page.reload();
@@ -695,7 +696,7 @@ test("Google signup starts a protected authorization and rejects a forged callba
     .getByRole("button", { name: "Create account with Google" })
     .click();
   await page.getByLabel("Username").fill("google_test_player");
-  await page.getByLabel("Signup code").fill(issueSignupCode());
+  await page.getByLabel("Signup code").fill(await issueSignupCode());
   await page.getByRole("button", { name: "Continue with Google" }).click();
   await page.waitForURL("https://accounts.google.com/**");
   const authorize = new URL(page.url());

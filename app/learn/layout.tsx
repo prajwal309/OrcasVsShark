@@ -12,7 +12,8 @@ export default async function LearnLayout({
 }) {
   const account = await sessionAccount({ allowUnavailable: true });
   const initial = account
-    ? (readIfAvailable((db) => loadProgress(db, account.id)) ?? emptyProgress)
+    ? ((await readIfAvailable((db) => loadProgress(db, account.id))) ??
+      emptyProgress)
     : emptyProgress;
   return (
     <ProgressProvider

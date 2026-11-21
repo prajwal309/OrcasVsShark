@@ -1,4 +1,5 @@
-import { randomBytes, scrypt, timingSafeEqual } from "node:crypto";
+import { randomBytes } from "node:crypto";
+import { hash, verify } from "@node-rs/argon2";
 import { cookies } from "next/headers";
 import { z } from "zod";
 import {
@@ -12,6 +13,7 @@ import {
 } from "@/lib/auth/session";
 import {
   createAccount,
+  emailSchema,
   invalidInvitation,
   invitationSchema as invitation,
   usernameSchema as username,
@@ -28,6 +30,7 @@ const input = z.discriminatedUnion("action", [
   z.strictObject({
     action: z.literal("register"),
     username,
+    email: emailSchema,
     password,
     confirmPassword: password,
     invitation: invitation.optional(),
@@ -38,35 +41,41 @@ const input = z.discriminatedUnion("action", [
 const invalid = () =>
   new RoomError(401, "INVALID_LOGIN", "Check your username or password.");
 
+const passwordOptions = {
+  // Argon2id is the library default.
+  memoryCost: 19 * 1024,
+  timeCost: 2,
+  parallelism: 1,
+};
+const dummyHash =
+  "$argon2id$v=19$m=19456,t=2,p=1$WdpYf4hX7ZN76Ot9vyJbmA$m7cTTw9rRow672eXlE5qhNW1BHrnigk9bzQC9kI3Dcg";
 let activeHashes = 0;
-async function derive(secret: string, salt: string): Promise<Buffer> {
+async function checkPassword(
+  secret: string,
+  stored: string | null | undefined,
+) {
   if (activeHashes >= 2)
     throw new RoomError(429, "SLOW_DOWN", "Please try again shortly.");
   activeHashes++;
   try {
-    return await new Promise<Buffer>((resolve, reject) => {
-      scrypt(
-        secret,
-        salt,
-        64,
-        { N: 131072, r: 8, p: 1, maxmem: 192 * 1024 * 1024 },
-        (error, key) => (error ? reject(error) : resolve(key)),
-      );
-    });
+    if (stored === undefined) return await hash(secret, passwordOptions);
+    return (await verify(stored ?? dummyHash, secret)) && stored
+      ? stored
+      : null;
   } finally {
     activeHashes--;
   }
 }
 
-function limit(bucket: string, maximum: number) {
-  const hits = transaction((db) => {
-    const { rows } = db.query<{ hits: number }>(
-      `INSERT INTO account_rate_limits VALUES ($1, unixepoch('subsec'), 1)
+async function limit(bucket: string, maximum: number) {
+  const hits = await transaction(async (db) => {
+    const { rows } = await db.query<{ hits: number }>(
+      `INSERT INTO account_rate_limits VALUES ($1, EXTRACT(EPOCH FROM clock_timestamp()), 1)
        ON CONFLICT (bucket) DO UPDATE SET
-         hits = CASE WHEN account_rate_limits.starts_at <= unixepoch('subsec') - 60
+         hits = CASE WHEN account_rate_limits.starts_at <= EXTRACT(EPOCH FROM clock_timestamp()) - 60
            THEN 1 ELSE account_rate_limits.hits + 1 END,
-         starts_at = CASE WHEN account_rate_limits.starts_at <= unixepoch('subsec') - 60
-           THEN unixepoch('subsec') ELSE account_rate_limits.starts_at END
+         starts_at = CASE WHEN account_rate_limits.starts_at <= EXTRACT(EPOCH FROM clock_timestamp()) - 60
+           THEN EXTRACT(EPOCH FROM clock_timestamp()) ELSE account_rate_limits.starts_at END
        RETURNING hits`,
       [bucket],
     );
@@ -92,6 +101,12 @@ export async function POST(request: Request) {
           400,
           "INVALID_USERNAME",
           "Use 3–24 letters, digits, or underscores.",
+        );
+      if (parsed.error.issues.some((issue) => issue.path[0] === "email"))
+        throw new RoomError(
+          400,
+          "INVALID_EMAIL",
+          "Enter a valid email address.",
         );
       if (parsed.error.issues.some((issue) => issue.path[0] === "invitation"))
         throw invalidInvitation();
@@ -131,7 +146,7 @@ export async function POST(request: Request) {
     };
     if (body.action === "logout") {
       if (previous)
-        transaction((db) =>
+        await transaction((db) =>
           db.query("DELETE FROM account_sessions WHERE token_hash = $1", [
             hashToken(previous),
           ]),
@@ -140,37 +155,27 @@ export async function POST(request: Request) {
       return { username: null };
     }
 
-    limit("auth", 30);
+    await limit("auth", 30);
     const login =
       body.action === "login"
-        ? read((db) => {
-            const { rows } = db.query<{
-              id: string;
-              password_hash: string | null;
-            }>("SELECT id, password_hash FROM accounts WHERE username = $1", [
-              body.username,
-            ]);
-            return rows[0];
-          })
-        : undefined;
-    const salt =
-      login?.password_hash?.split(":")[0] ?? randomBytes(16).toString("hex");
-    const key = await derive(body.password, salt);
-    const digest = `${salt}:${key.toString("hex")}`;
-    const savedDigest = Buffer.from(login?.password_hash ?? "");
-    const derivedDigest = Buffer.from(digest);
-    if (
-      body.action === "login" &&
-      (savedDigest.length !== derivedDigest.length ||
-        !timingSafeEqual(savedDigest, derivedDigest))
-    )
-      throw invalid();
+        ? await read((db) =>
+            db.accounts.findUnique({
+              where: { username: body.username },
+              select: { id: true, password_hash: true },
+            }),
+          )
+        : null;
+    const digest = await checkPassword(
+      body.password,
+      body.action === "login" ? (login?.password_hash ?? null) : undefined,
+    );
+    if (!digest) throw invalid();
 
     const token = randomBytes(32).toString("hex");
-    const name = transaction((db) => {
+    const name = await transaction(async (db) => {
       if (body.action === "login") {
-        const account = db.query(
-          "SELECT id FROM accounts WHERE id = $1 AND password_hash = $2",
+        const account = await db.query(
+          "SELECT id FROM accounts WHERE id = $1 AND password_hash = $2 FOR UPDATE",
           [login!.id, digest],
         );
         if (!account.rowCount) throw invalid();
@@ -178,32 +183,35 @@ export async function POST(request: Request) {
       let id = login?.id;
       let name = "username" in body ? body.username : "";
       if (body.action === "register") {
-        id = createAccount(
+        id = await createAccount(
           db,
           name,
+          body.email,
           body.invitation && hashToken(body.invitation),
           {
             passwordHash: digest,
           },
         );
       } else if (body.action === "reset") {
-        const invite = db.query<{ reset_account: string }>(
-          `DELETE FROM account_invites WHERE token_hash = $1 AND expires_at > unixepoch('subsec')
+        const invite = await db.query<{ reset_account: string }>(
+          `DELETE FROM account_invites WHERE token_hash = $1 AND expires_at > EXTRACT(EPOCH FROM clock_timestamp())
            AND reset_account IS NOT NULL RETURNING reset_account`,
           [hashToken(body.invitation)],
         );
         if (!invite.rowCount) throw invalidInvitation();
         id = invite.rows[0].reset_account;
-        const updated = db.query<{ username: string }>(
+        const updated = await db.query<{ username: string }>(
           "UPDATE accounts SET password_hash = $2 WHERE id = $1 AND password_hash IS NOT NULL RETURNING username",
           [id, digest],
         );
         if (!updated.rowCount) throw invalidInvitation();
         name = updated.rows[0].username;
-        db.query("DELETE FROM account_sessions WHERE account_id = $1", [id]);
+        await db.query("DELETE FROM account_sessions WHERE account_id = $1", [
+          id,
+        ]);
       }
       if (!id) throw invalid();
-      replaceSession(db, id, token, previous);
+      await replaceSession(db, id, token, previous);
       return name;
     });
     jar.set(sessionCookie, token, { ...attributes, maxAge: sessionSeconds });
