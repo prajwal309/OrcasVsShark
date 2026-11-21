@@ -1,18 +1,18 @@
-import Link from "next/link";
-import { Rules } from "@/components/game/game";
-export default function Learn() {
-  return (
-    <main className="learn-page">
-      <Link href="/play">← Back to the ocean table</Link>
-      <p className="eyebrow">ROOTED IN NEPAL</p>
-      <h1>
-        An ancient game.
-        <br />A new ocean.
-      </h1>
-      <Rules />
-      <Link className="primary-button" href="/play">
-        Play a local game →
-      </Link>
-    </main>
-  );
+import type { Metadata } from "next";
+import { Academy } from "@/components/learn/academy";
+import "./academy.css";
+
+export const metadata: Metadata = {
+  title: "Learn to Play | Orcas vs Sharks",
+  description:
+    "Learn Bagh Chal with interactive lessons, tactical puzzles, and guided practice.",
+};
+
+export default async function Learn({
+  searchParams,
+}: {
+  searchParams: Promise<{ section?: string; activity?: string }>;
+}) {
+  const { section, activity } = await searchParams;
+  return <Academy section={section} activity={activity} />;
 }

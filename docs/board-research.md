@@ -1,6 +1,6 @@
 # Board research and heritage
 
-Orcas vs Sharks is an original ocean-themed digital adaptation of Bagh-Chal, a traditional asymmetric strategy game of Nepal. We do not claim an exact invention date or equate its rules with other regional games.
+Orcas vs Sharks is an original ocean-themed digital adaptation of Baghchal, a traditional asymmetric strategy game of Nepal. We do not claim an exact invention date or equate its rules with other regional games.
 
 Independent sources consulted on 20 September 2026:
 

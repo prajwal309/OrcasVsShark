@@ -19,6 +19,8 @@ import { deserializeState, serializeState } from "@/lib/game/serialization";
 import { computerSettingsSchema, type ComputerSettings } from "@/lib/ai/types";
 import { useComputer } from "./use-computer";
 import { VictoryBanner } from "./victory-banner";
+import { RankedClocks } from "./ranked-clocks";
+import { timeControls } from "@/lib/multiplayer/ranking";
 import { AccountLink } from "@/components/navigation/account-navigation";
 import type { OnlineController } from "./online-room";
 import type { GameState, Move, NodeId, Side } from "@/lib/game/types";
@@ -92,7 +94,7 @@ export function Rules({
         There is no automatic repetition draw.
       </p>
       <p className="heritage">
-        An original digital adaptation of Bagh-Chal, the traditional asymmetric
+        An original digital adaptation of Bagh Chal, the traditional asymmetric
         strategy game of Nepal.
       </p>
     </div>
@@ -399,24 +401,30 @@ export default function Game({
     { length: Math.ceil(session.moves.length / 2) },
     (_, i) => session.moves.slice(i * 2, i * 2 + 2),
   );
-  const replayLabel = online
-    ? online.room.rematchOffer && online.room.rematchOffer !== online.room.side
-      ? "Accept rematch"
-      : "Rematch"
-    : ending
-      ? "Play again"
-      : "New game";
+  const ranked = online?.room.ranked;
+  const replayLabel = ranked
+    ? "Back to ranked lobby"
+    : online
+      ? online.room.rematchOffer &&
+        online.room.rematchOffer !== online.room.side
+        ? "Accept rematch"
+        : "Rematch"
+      : ending
+        ? "Play again"
+        : "New game";
   const replayDisabled =
     !ready ||
     !!(
       online &&
+      !ranked &&
       (!ending ||
         online.busy ||
         !online.connected ||
         online.room.rematchOffer === online.room.side)
     );
   function requestNewGame() {
-    if (online) void online.send({ kind: "rematch" });
+    if (ranked) online.returnToLobby();
+    else if (online) void online.send({ kind: "rematch" });
     else if (ending || state.ply === 0) reset();
     else setModal("restart");
   }
@@ -468,7 +476,9 @@ export default function Game({
             <span>♧</span>
             <div>
               {online
-                ? "Online two-player"
+                ? ranked
+                  ? `Ranked ${timeControls[ranked.mode].name}`
+                  : "Online two-player"
                 : computer
                   ? "Against the computer"
                   : "Local two-player"}
@@ -506,17 +516,28 @@ export default function Game({
               <strong>Room {online.room.code}</strong> · Round{" "}
               {online.room.round} · You are {title(online.room.side)}
             </div>
-            <label htmlFor="invite-link">Share this room link</label>
-            <input
-              id="invite-link"
-              readOnly
-              value={
-                typeof window === "undefined"
-                  ? `/game/${online.room.code}`
-                  : `${window.location.origin}/game/${online.room.code}`
-              }
-              onFocus={(event) => event.target.select()}
-            />
+            {ranked ? (
+              <RankedClocks
+                ranking={ranked}
+                anchor={online.clockAnchor}
+                turn={ending ? null : state.turn}
+                labels={labels.sides}
+              />
+            ) : (
+              <>
+                <label htmlFor="invite-link">Share this room link</label>
+                <input
+                  id="invite-link"
+                  readOnly
+                  value={
+                    typeof window === "undefined"
+                      ? `/game/${online.room.code}`
+                      : `${window.location.origin}/game/${online.room.code}`
+                  }
+                  onFocus={(event) => event.target.select()}
+                />
+              </>
+            )}
             <p role="status">
               {!online.connected
                 ? "Connection lost. Reconnecting…"
@@ -527,8 +548,11 @@ export default function Game({
                     : `${online.room.side === state.turn ? "Your turn" : "Opponent’s turn"}. ${title(state.turn)} to play. ${state.ply ? `Last move: ${formatMove(session.moves.at(-1)!)}` : ""}`}
               {!online.room.waiting &&
               online.connected &&
-              !online.room.opponentOnline
-                ? " · Opponent disconnected. Their seat is reserved."
+              !online.room.opponentOnline &&
+              !ending
+                ? ranked
+                  ? " · Opponent disconnected. The clock is still running."
+                  : " · Opponent disconnected. Their seat is reserved."
                 : ""}
             </p>
             {online.message && <p role="alert">{online.message}</p>}
@@ -780,7 +804,7 @@ export default function Game({
               </div>
             </section>
             <div className="game-actions">
-              {(!ending || ending.winner === "draw") && (
+              {(!ranked || ending) && (!ending || ending.winner === "draw") && (
                 <button
                   aria-label={replayLabel}
                   className="primary-button"
@@ -839,7 +863,7 @@ export default function Game({
             <span className="footer-mark">◈</span> A new tide. An ancient game.
           </div>
           <p>
-            Inspired by <Link href="/learn">Bagh-Chal</Link>, the traditional
+            Inspired by <Link href="/learn">Bagh Chal</Link>, the traditional
             strategy game of Nepal.
           </p>
           <span className="local-note">

@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import Game from "./game";
 import { ApiError, roomApi } from "@/lib/multiplayer/client";
 import type {
@@ -14,10 +15,19 @@ export interface OnlineController {
   busy: boolean;
   connected: boolean;
   message: string;
+  clockAnchor: ClockAnchor;
+  returnToLobby: () => void;
   send: (action: RoomAction) => Promise<void>;
 }
 
+type ClockAnchor = { receivedAt: number; latency: number };
+
 export function OnlineRoom({ code }: { code: string }) {
+  const router = useRouter();
+  const [clockAnchor, setClockAnchor] = useState<ClockAnchor>({
+    receivedAt: 0,
+    latency: 0,
+  });
   const [room, setRoom] = useState<RoomView | null>(null);
   const [busy, setBusy] = useState(false);
   const [connected, setConnected] = useState(false);
@@ -29,8 +39,24 @@ export function OnlineRoom({ code }: { code: string }) {
   const submitting = useRef(false);
   const refreshing = useRef(false);
 
-  const accept = useCallback((next: RoomView) => {
-    if (latest.current && next.revision < latest.current.revision) return;
+  const accept = useCallback((next: RoomView, requestedAt: number) => {
+    const current = latest.current;
+    if (
+      current &&
+      (next.revision < current.revision ||
+        (next.revision === current.revision &&
+          next.ranked &&
+          current.ranked &&
+          next.ranked.sampledAt < current.ranked.sampledAt))
+    )
+      return;
+    if (next.ranked) {
+      const receivedAt = performance.now();
+      setClockAnchor({
+        receivedAt,
+        latency: Math.min((receivedAt - requestedAt) / 2, 1000),
+      });
+    }
     latest.current = next;
     setRoom(next);
     setConnected(true);
@@ -42,7 +68,8 @@ export function OnlineRoom({ code }: { code: string }) {
     if (refreshing.current) return;
     refreshing.current = true;
     try {
-      accept(await roomApi(`/${code}`));
+      const started = performance.now();
+      accept(await roomApi(`/${code}`), started);
     } catch (error) {
       setConnected(false);
       if (error instanceof ApiError && error.status === 401) {
@@ -66,9 +93,10 @@ export function OnlineRoom({ code }: { code: string }) {
     }
   }, [accept, code]);
 
+  const pollingMs = room?.ranked && !room.ending ? 1000 : 2000;
   useEffect(() => {
     const initial = window.setTimeout(() => void refresh(), 0);
-    const interval = window.setInterval(() => void refresh(), 2000);
+    const interval = window.setInterval(() => void refresh(), pollingMs);
     const offline = () => {
       setConnected(false);
       setMessage("You are offline. Reconnecting…");
@@ -84,7 +112,7 @@ export function OnlineRoom({ code }: { code: string }) {
       window.removeEventListener("offline", offline);
       window.removeEventListener("focus", resume);
     };
-  }, [code, refresh]);
+  }, [code, refresh, pollingMs]);
 
   async function send(action: RoomAction) {
     if (submitting.current) return;
@@ -99,7 +127,8 @@ export function OnlineRoom({ code }: { code: string }) {
     };
     pending.current = request;
     try {
-      accept(await roomApi(`/${code}`, request));
+      const started = performance.now();
+      accept(await roomApi(`/${code}`, request), started);
       pending.current = null;
       setRetry(null);
       setMessage("");
@@ -155,7 +184,15 @@ export function OnlineRoom({ code }: { code: string }) {
         </div>
       )}
       <Game
-        online={{ room, busy: busy || !!retry, connected, message, send }}
+        online={{
+          room,
+          busy: busy || !!retry,
+          connected,
+          message,
+          send,
+          clockAnchor,
+          returnToLobby: () => router.push("/#ranked-lobby"),
+        }}
       />
     </>
   );

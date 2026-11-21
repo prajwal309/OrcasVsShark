@@ -38,6 +38,15 @@ Phase 2 computer play uses the existing local session and canonical engine. `lib
 
 `use-computer.ts` creates a worker per computer turn and terminates it on completion, undo, restart, resignation, mode changes or unmount. It ignores stale and duplicate responses. Failure and watchdog expiry leave the human seat unchanged and provide an explicit retry. The CSP permits workers only from the app's own origin. Computer settings are stored together with the local replay; old two-player saves still load. Online sessions never start a computer worker. See [computer behavior and limitations](computer.md).
 
-## Remaining phases
+## Ranked online play
 
-Phase 2 analysis tools remain deferred. Casual matchmaking and private rooms use invite-only player accounts. Clocks, public profiles, chat, and spectators remain deferred. Future public features require the relevant privacy, moderation and data-model work before exposure. Ratings, repetition/no-progress policies, clocks and abandonment reconciliation remain separate work. Nothing in this increment authorizes a public production deployment.
+Matchmaking uses separate queues for casual play and each ranked time control.
+Ranked opponents need mutually compatible Elo ranges. The server creates the
+room and starts its clock in the same SQLite transaction. Ranked clock records
+store a remaining balance for each side and a deadline for the active turn.
+A legal move updates the balances and deadline in the room transaction.
+Requests and the server's clock worker both settle overdue games. The room
+result, ranked history, and both Elo updates commit together.
+
+Public profiles and leaderboards show username, rating, and ranked results by
+mode. See [multiplayer setup](multiplayer.md) for the clock and reconnect rules.

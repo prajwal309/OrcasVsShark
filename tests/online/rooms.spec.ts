@@ -422,7 +422,9 @@ test("a player can reclaim a seat and password reset revokes old sessions", asyn
     const reset = issueResetCode(username);
     await returning.goto("/online");
     await returning.getByRole("button", { name: "Sign out" }).click();
-    await returning.getByRole("button", { name: "Use a reset code" }).click();
+    await returning
+      .getByRole("button", { name: "Forgot your password?" })
+      .click();
     await returning
       .getByLabel("Password", { exact: true })
       .fill("new test-only long password");

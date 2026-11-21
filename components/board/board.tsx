@@ -17,6 +17,7 @@ export function Board({
   theme = "ocean",
   motionEnabled = true,
   finished = false,
+  focusNodes = [],
 }: {
   state: GameState;
   selected: NodeId | null;
@@ -27,6 +28,7 @@ export function Board({
   theme?: BoardTheme;
   motionEnabled?: boolean;
   finished?: boolean;
+  focusNodes?: readonly NodeId[];
 }) {
   const refs = useRef<Partial<Record<NodeId, SVGGElement | null>>>({});
   const [frame, setFrame] = useState<{
@@ -86,7 +88,7 @@ export function Board({
     <svg
       className={`game-board${finished || state.result ? " is-finished" : ""}`}
       viewBox="0 0 520 520"
-      aria-label="Bagh-Chal game board. Use arrow keys to navigate, Enter or Space to play."
+      aria-label="Bagh Chal game board. Use arrow keys to navigate, Enter or Space to play."
       role="group"
     >
       <defs>
@@ -227,7 +229,8 @@ export function Board({
         const p = point(node),
           piece = state.board[node],
           legal = moves.some((m) => m.to === node),
-          active = selected === node;
+          active = selected === node,
+          marked = focusNodes.includes(node);
         const last =
           lastMove &&
           (lastMove.to === node ||
@@ -240,7 +243,7 @@ export function Board({
             }}
             role="button"
             tabIndex={0}
-            aria-label={`${node}, ${piece ? themeLabels(theme).pieces[piece] : "empty"}${legal ? ", legal destination" : ""}`}
+            aria-label={`${node}, ${piece ? themeLabels(theme).pieces[piece] : "empty"}${legal ? ", legal destination" : ""}${marked ? ", marked for the exercise" : ""}`}
             aria-pressed={active}
             className={`board-node ${active ? "selected" : ""}`}
             transform={`translate(${p.x} ${p.y})`}
@@ -281,6 +284,9 @@ export function Board({
               />
             )}
             {!piece && <circle r="3.5" className="intersection" />}
+            {marked && !active && (
+              <circle r="33" className="academy-focus-ring" />
+            )}
             {active && (
               <circle
                 r="31"

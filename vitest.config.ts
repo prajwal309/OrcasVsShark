@@ -9,6 +9,7 @@ export default defineConfig({
       "tests/engine/**/*.test.ts",
       "tests/components/**/*.test.tsx",
       "tests/multiplayer/**/*.test.ts",
+      "tests/learn/**/*.test.ts",
     ],
     environment: "jsdom",
     setupFiles: ["./tests/setup.ts"],

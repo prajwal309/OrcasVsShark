@@ -50,7 +50,7 @@ npm run account:code -- invite
 npm run account:code -- reset PLAYER_USERNAME
 ```
 
-Share reset codes privately. The player chooses **Use a reset code** at
+Share reset codes privately. The player chooses **Forgot your password?** at
 `/online` and sets a new password. The code expires after 30 minutes, can be used
 once, and revokes all of the player's previous sessions while keeping their
 account ID and room seats.
@@ -80,6 +80,32 @@ The schema keeps accounts, sessions, signup and reset codes, and rate-limit
 buckets. Games store player IDs, state, derived status, and timestamps. Moves
 are append-only, completed rounds are archived before rematches, and matchmaking
 entries and request receipts are persisted separately.
+
+## Ranked play
+
+Choose **Fast**, **Medium**, or **Classic** in the Ranked lobby to start
+searching. Each preset has its own Elo pool and clock.
+
+| Mode    | Starting time per player | Increment per legal move |
+| ------- | ------------------------ | ------------------------ |
+| Fast    | 3 minutes                | 5 seconds                |
+| Medium  | 5 minutes                | 5 seconds                |
+| Classic | 10 minutes               | 10 seconds               |
+
+Matchmaking pairs eligible players within 100 Elo to start. Each player's
+search window grows by 50 points every ten seconds, up to 400. Casual matching
+and private rooms are untimed. Ranked games start as soon as a match is found,
+with the Sharks clock running first. The clock continues on disconnect and
+the opponent wins when time expires. Reopening the game or lobby restores the
+same ranked seat. Persisted deadlines also allow the server to settle expired
+games after a restart. To play another ranked match after a result, return to the
+lobby.
+
+Each rating starts at 1500. The server applies Elo with a fixed K-factor of 32
+after a ranked win, loss, or draw. Match outcomes and both rating changes are
+saved together in SQLite. Profiles show per-mode records and recent finished
+games. A player enters a mode's public leaderboard after the first finished
+ranked game in that mode.
 
 ## Backups and restore
 

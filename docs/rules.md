@@ -10,6 +10,6 @@ Engine version: 1.0.0. The authority is AGENTS.md.
 6. Jumps cannot turn, skip a missing segment, cross an Orca, or land on another piece. Captures are optional; there are no chained captures.
 7. Orcas win immediately at five captures. Sharks win when all four Orcas have no legal step or capture.
 8. Resignation and agreed draws are application results, not board moves. Both players share the device and must agree to a draw. Undo is unrestricted locally, including undoing a result.
-9. There is no automatic repetition or no-progress draw in this local ruleset. Online clocks, timeout, abandonment, and rated play are deferred.
+9. There is no automatic repetition or no-progress draw in this local ruleset. Ranked online games also end when a player runs out of time.
 
 Notation: `+c3` is a placement, `a1–a2` is a step, and `a1×c1` is a capture. History pairs a Shark ply followed by an Orca ply. Coordinates are fixed to the position and do not change when the board is visually flipped.

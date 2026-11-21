@@ -15,6 +15,11 @@ import {
 import { roomApi } from "@/lib/multiplayer/client";
 import type { QueueAction, QueueState } from "@/lib/multiplayer/matchmaking";
 import { roomCodeSchema } from "@/lib/multiplayer/protocol";
+import {
+  rankedModes,
+  timeControls,
+  type MatchMode,
+} from "@/lib/multiplayer/ranking";
 
 function googleErrorMessage(error?: string) {
   switch (error) {
@@ -56,12 +61,12 @@ export function OnlineLobby({
   const loginLink = returnRoom ? `/online?room=${returnRoom}` : "/online";
   const registerLink = `/online?account=register${returnRoom ? `&room=${returnRoom}` : ""}#online-account`;
 
-  const [searching, setSearching] = useState(false);
+  const [searching, setSearching] = useState<MatchMode | null>(null);
   const [queueBusy, setQueueBusy] = useState(false);
   const [queueMessage, setQueueMessage] = useState("");
   const queueRequest = useRef<AbortController | null>(null);
   const queue = useCallback(
-    async (action: QueueAction, signal?: AbortSignal) => {
+    async (action: QueueAction, signal?: AbortSignal, mode?: MatchMode) => {
       if (action === "status" && queueRequest.current) return;
       queueRequest.current?.abort();
       const controller = new AbortController();
@@ -71,7 +76,7 @@ export function OnlineLobby({
         const response = await fetch("/api/matchmaking", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action }),
+          body: JSON.stringify({ action, mode }),
           signal: AbortSignal.any([
             controller.signal,
             AbortSignal.timeout(5000),
@@ -82,12 +87,14 @@ export function OnlineLobby({
         if (!response.ok) throw new Error(result.error);
         if (signal?.aborted || controller.signal.aborted) return;
         const state = result as QueueState;
-        setSearching(state.status !== "idle");
+        setSearching(state.status === "idle" ? null : (state.mode ?? "casual"));
         setQueueMessage(
           state.status === "matched"
             ? "Opponent found. Opening your game…"
             : state.status === "waiting"
-              ? "Looking for an opponent…"
+              ? state.mode
+                ? `Looking for a ${timeControls[state.mode].name} opponent…`
+                : "Looking for an opponent…"
               : "",
         );
         if (state.status === "matched") router.push(`/game/${state.code}`);
@@ -172,7 +179,7 @@ export function OnlineLobby({
       if (!response.ok) throw new Error(data.error);
       setAccount(data.username);
       if (!data.username) {
-        setSearching(false);
+        setSearching(null);
         setQueueMessage("");
       }
       requestId.current = null;
@@ -217,7 +224,7 @@ export function OnlineLobby({
       </header>
       <main className="main-content online-lobby play-lobby">
         <div>
-          <p className="eyebrow">A BAGH-CHAL STRATEGY GAME</p>
+          <p className="eyebrow">A BAGH CHAL STRATEGY GAME</p>
           <h1>Orcas vs Sharks</h1>
           <p>Four Orcas hunt. Twenty Sharks close in.</p>
         </div>
@@ -232,7 +239,7 @@ export function OnlineLobby({
             </p>
             {account ? (
               <div className="play-mode-actions">
-                {searching ? (
+                {searching === "casual" ? (
                   <button
                     className="primary-button"
                     disabled={queueBusy}
@@ -243,14 +250,14 @@ export function OnlineLobby({
                 ) : (
                   <button
                     className="primary-button"
-                    disabled={queueBusy || busy}
+                    disabled={queueBusy || busy || !!searching}
                     onClick={() => void queue("enter")}
                   >
                     Find opponent
                   </button>
                 )}
                 <button
-                  disabled={busy || searching || queueBusy}
+                  disabled={busy || !!searching || queueBusy}
                   onClick={() => void create()}
                 >
                   Create Game
@@ -261,7 +268,6 @@ export function OnlineLobby({
                 Sign in to play online
               </a>
             )}
-            <p role="status">{queueMessage}</p>
           </section>
           <section
             className="turn-card play-mode"
@@ -277,19 +283,77 @@ export function OnlineLobby({
             </Link>
           </section>
         </div>
+        <section
+          className="turn-card ranked-lobby"
+          id="ranked-lobby"
+          aria-labelledby="ranked-lobby-title"
+        >
+          <div className="ranked-section-heading">
+            <h2 id="ranked-lobby-title">Ranked lobby</h2>
+            <Link href="/leaderboards">Leaderboards</Link>
+          </div>
+          <p>Choose a time control to find a player near your rating.</p>
+          <div className="ranked-quick-pair">
+            {rankedModes.map((mode) => {
+              const control = timeControls[mode];
+              const description = (
+                <>
+                  <strong>{control.name}</strong>
+                  <span>
+                    {control.minutes} + {control.increment}
+                  </span>
+                </>
+              );
+              return account ? (
+                <button
+                  key={mode}
+                  type="button"
+                  disabled={busy || queueBusy || !!searching}
+                  data-searching={searching === mode || undefined}
+                  onClick={() => void queue("enter", undefined, mode)}
+                >
+                  {description}
+                </button>
+              ) : (
+                <a
+                  key={mode}
+                  href="#online-account"
+                  aria-label={`Sign in for ${control.name} ranked play`}
+                >
+                  {description}
+                </a>
+              );
+            })}
+          </div>
+          {searching && searching !== "casual" && (
+            <button
+              type="button"
+              disabled={queueBusy}
+              onClick={() => void queue("cancel")}
+            >
+              Cancel search
+            </button>
+          )}
+          <p role="status">{queueMessage}</p>
+        </section>
         <section className="turn-card lobby-account" id="online-account">
           <h2>
             {account
               ? "Account and private rooms"
               : mode === "register"
                 ? "Create a player account"
-                : "Your player account"}
+                : mode === "reset"
+                  ? "Reset your password"
+                  : "Your player account"}
           </h2>
           {account ? (
             <>
               <p>Signed in as {account}</p>
+              <Link className="ranked-text-link" href={`/players/${account}`}>
+                View player profile
+              </Link>
               <button
-                disabled={busy || searching || queueBusy}
+                disabled={busy || !!searching || queueBusy}
                 onClick={() => void authenticate()}
               >
                 Sign out
@@ -322,13 +386,22 @@ export function OnlineLobby({
                   placeholder="ABCDEFGH"
                   required
                 />
-                <button type="submit" disabled={busy || searching || queueBusy}>
+                <button
+                  type="submit"
+                  disabled={busy || !!searching || queueBusy}
+                >
                   Join Game
                 </button>
               </form>
             </>
           ) : (
             <>
+              {mode === "reset" && (
+                <p>
+                  Enter the reset code from your server administrator and choose
+                  a new password.
+                </p>
+              )}
               <form
                 key={mode}
                 method="post"
@@ -421,7 +494,14 @@ export function OnlineLobby({
                 </Link>
               )}
               {mode !== "login" && mode !== "register" && (
-                <button disabled={busy} onClick={() => setMode("login")}>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    setMessage("");
+                    setMode("login");
+                  }}
+                >
                   Back to sign in
                 </button>
               )}
@@ -443,10 +523,19 @@ export function OnlineLobby({
                       </button>
                     </>
                   )}
-                  <Link href={registerLink}>Create an account</Link>
-                  <button disabled={busy} onClick={() => setMode("reset")}>
-                    Use a reset code
-                  </button>
+                  <div className="account-options">
+                    <Link href={registerLink}>Create an account</Link>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => {
+                        setMessage("");
+                        setMode("reset");
+                      }}
+                    >
+                      Forgot your password?
+                    </button>
+                  </div>
                 </>
               )}
             </>
@@ -455,7 +544,7 @@ export function OnlineLobby({
         </section>
         <div className="lobby-links">
           <Link href="/play">Play locally on one device</Link>
-          <Link href="/learn">Learn the rules</Link>
+          <Link href="/learn">Learn to Play</Link>
         </div>
       </main>
     </div>

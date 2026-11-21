@@ -17,5 +17,8 @@ export async function register() {
 
     const { database } = await import("./lib/database/connection");
     database();
+    const { startRankedClockWorker } =
+      await import("./lib/multiplayer/clock-worker");
+    startRankedClockWorker();
   }
 }

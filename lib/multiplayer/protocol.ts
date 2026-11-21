@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { GameState, Move, Side } from "@/lib/game/types";
+import type { RankedView } from "./ranking";
 
 const node = z.string().regex(/^[a-e][1-5]$/);
 export const moveSchema = z.discriminatedUnion("kind", [
@@ -45,6 +46,7 @@ export interface RoomView extends Omit<Room, "orcas" | "sharks"> {
   side: Side;
   waiting: boolean;
   opponentOnline: boolean;
+  ranked?: RankedView;
 }
 export class RoomError extends Error {
   constructor(
