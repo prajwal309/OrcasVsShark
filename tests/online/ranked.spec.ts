@@ -96,7 +96,10 @@ test("ranked pairing, clock recovery and unattended timeout update profiles and 
         player.getByRole("timer", { name: "Orcas time" }),
       ).toHaveText("0:00");
     }
-    await page.getByRole("link", { name: winner }).click();
+    await page
+      .getByRole("region", { name: "Online room" })
+      .getByRole("link", { name: winner })
+      .click();
     await expect(page.getByRole("heading", { name: winner })).toBeVisible();
     await expect(
       page.getByRole("region", { name: "Fast rating" }),

@@ -34,11 +34,17 @@
   min-height: 44px;
   max-width: 100%;
   padding: 8px 12px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--control-line);
   border-radius: 8px;
-  background: var(--surface);
+  background: var(--field);
   color: var(--text);
   font: inherit;
+}
+
+.academy-appearance {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
 }
 
 .academy-nav {
@@ -181,7 +187,7 @@
 
 .academy-focus-ring {
   fill: none;
-  stroke: var(--accent);
+  stroke: var(--board-accent);
   stroke-width: 2.5;
   stroke-dasharray: 4 5;
   pointer-events: none;
@@ -189,6 +195,11 @@
 
 .academy-instructions {
   min-width: 0;
+}
+
+.academy-instructions h2 {
+  font-size: clamp(1.4rem, 3vw, 1.85rem);
+  line-height: 1.2;
 }
 
 .academy-instructions h2:focus {
@@ -263,8 +274,9 @@
 
 .academy-options button,
 .academy-actions button {
-  border: 1px solid var(--line);
+  border: 1px solid var(--control-line);
   border-radius: 8px;
+  background: var(--surface-raised);
 }
 
 .academy-practice-settings {

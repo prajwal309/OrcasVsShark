@@ -291,7 +291,7 @@ export function Board({
               <circle
                 r="31"
                 fill="none"
-                stroke="var(--accent)"
+                stroke="var(--board-accent)"
                 strokeWidth="2.5"
                 strokeDasharray="5 4"
                 className="selection-ring"
@@ -300,7 +300,7 @@ export function Board({
             {legal && !piece && (
               <>
                 <circle r="13" className="legal-halo" />
-                <circle r="5" fill="var(--accent)" />
+                <circle r="5" fill="var(--board-accent)" />
               </>
             )}
           </g>

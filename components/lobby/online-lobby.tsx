@@ -13,6 +13,7 @@ import {
   useAccount,
 } from "@/components/navigation/account-navigation";
 import { roomApi } from "@/lib/multiplayer/client";
+import { SiteThemeSelect } from "@/components/navigation/site-theme-select";
 import type { QueueAction, QueueState } from "@/lib/multiplayer/matchmaking";
 import { roomCodeSchema } from "@/lib/multiplayer/protocol";
 import {
@@ -223,10 +224,13 @@ export function OnlineLobby({
         </div>
       </header>
       <main className="main-content online-lobby play-lobby">
-        <div>
-          <p className="eyebrow">A BAGH CHAL STRATEGY GAME</p>
-          <h1>Orcas vs Sharks</h1>
-          <p>Four Orcas hunt. Twenty Sharks close in.</p>
+        <div className="lobby-intro">
+          <div>
+            <p className="eyebrow">A BAGH CHAL STRATEGY GAME</p>
+            <h1>Orcas vs Sharks</h1>
+            <p>Four Orcas hunt. Twenty Sharks close in.</p>
+          </div>
+          <SiteThemeSelect />
         </div>
         <div className="play-modes">
           <section

@@ -190,6 +190,20 @@ describe("ranked SQLite games", () => {
   it("increments only a committed move, keeps clocks running through disconnect and settles a draw once", () => {
     const { code, orcas, sharks } = pair();
     const initial = tx(() => readRoom(db, code, sharks, base + 1500));
+    expect(() =>
+      tx(() =>
+        changeRoom(
+          db,
+          code,
+          sharks,
+          action(initial, {
+            kind: "move",
+            move: { kind: "place", to: "a1" },
+          }),
+          base + 1500,
+        ),
+      ),
+    ).toThrow(/not legal/);
     const first = action(initial, {
       kind: "move",
       move: { kind: "place", to: "c3" },

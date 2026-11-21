@@ -1,18 +1,53 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #09151f;
-  --surface: #10232e;
-  --surface-raised: #152c36;
-  --board: #102f39;
-  --text: #e2eeeb;
-  --muted: #96adb4;
-  --accent: #9cd9c3;
-  --line: #324952;
-  --board-line: #60868b;
-  --font-sans: Arial, Helvetica, sans-serif;
+  --navy: #18263d;
+  --gold: #d5a547;
+  --beige: #e8e0cc;
+  --ivory: #fcfaf6;
+  --bg: var(--navy);
+  --surface: #22324c;
+  --surface-raised: #2b3d59;
+  --field: #1b2a43;
+  --text: var(--ivory);
+  --muted: var(--beige);
+  --accent: var(--gold);
+  --action: var(--gold);
+  --action-text: var(--navy);
+  --action-hover: #edc46f;
+  --line: #4b5870;
+  --control-line: #8b806b;
+  --hairline: color-mix(in srgb, var(--accent) 25%, transparent);
+  --surface-tint: color-mix(in srgb, var(--accent) 7%, transparent);
+  --shell-glow: color-mix(in srgb, var(--accent) 5%, transparent);
+  --shadow: rgb(12 18 31 / 24%);
+  --overlay: rgb(12 18 31 / 74%);
+  --warning: #ffc6a4;
+  --board: #213653;
+  --board-line: #a2bdc4;
+  --board-ink: var(--ivory);
+  --board-accent: #f1cd7a;
+  --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Palatino Linotype", Palatino, Georgia, serif;
   color-scheme: dark;
 }
+
+:root[data-site-theme="ivory"] {
+  --bg: #f4eee1;
+  --surface: var(--ivory);
+  --surface-raised: #eee6d4;
+  --field: #fffdf8;
+  --text: var(--navy);
+  --muted: #51576a;
+  --accent: #6e4c12;
+  --line: #cbbda4;
+  --control-line: #827157;
+  --shell-glow: color-mix(in srgb, var(--gold) 12%, transparent);
+  --shadow: rgb(24 38 61 / 12%);
+  --warning: #873c2c;
+  color-scheme: light;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -20,7 +55,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
   font-size: 14px;
 }
 button,
@@ -64,12 +99,13 @@ input:focus-visible {
 .site-shell {
   min-height: 100vh;
   background:
-    radial-gradient(ellipse at 28% 37%, #15313b44, transparent 65%), var(--bg);
+    radial-gradient(ellipse at 22% 0%, var(--shell-glow), transparent 58%),
+    var(--bg);
 }
 .site-header {
   height: 88px;
   padding: 0 max(5vw, 24px);
-  border-bottom: 1px solid #8ab6bd19;
+  border-bottom: 1px solid var(--hairline);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -79,6 +115,7 @@ input:focus-visible {
   display: flex;
   align-items: center;
   gap: 13px;
+  font-family: var(--font-display);
   font-size: 16px;
   letter-spacing: 2px;
   font-weight: 700;
@@ -147,10 +184,10 @@ input:focus-visible {
   background: var(--accent);
   display: inline-block;
   flex-shrink: 0;
-  box-shadow: 0 0 9px #9cd9c320;
+  box-shadow: 0 0 9px var(--hairline);
 }
 h1 {
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-display);
   font-weight: 400;
   font-size: clamp(30px, 3.4vw, 43px);
   letter-spacing: -1px;
@@ -208,7 +245,7 @@ h1 {
   width: 46px;
   border: 1px solid var(--line);
   border-radius: 9px;
-  background: var(--surface);
+  background: var(--board);
   display: grid;
   place-items: center;
 }
@@ -237,7 +274,7 @@ h1 {
   display: flex;
   align-items: center;
   gap: 4px;
-  color: #769499;
+  color: var(--muted);
 }
 .capture-score > span {
   font-size: 20px;
@@ -258,15 +295,15 @@ h1 {
 }
 .board-surface {
   position: relative;
-  border: 1px solid #5679805e;
+  border: 1px solid var(--hairline);
   border-radius: 12px;
   padding: 13px 20px 10px;
   background:
-    radial-gradient(ellipse at 50% 25%, #22505a33, transparent 80%),
+    radial-gradient(ellipse at 50% 25%, rgb(255 255 255 / 5%), transparent 80%),
     var(--board);
   box-shadow:
-    0 16px 50px #0003,
-    inset 0 0 0 5px #0b26303b;
+    0 16px 50px var(--shadow),
+    inset 0 0 0 5px rgb(12 18 31 / 18%);
 }
 .game-board {
   width: 100%;
@@ -292,7 +329,7 @@ h1 {
   font:
     10px Arial,
     sans-serif;
-  fill: var(--muted);
+  fill: var(--board-ink);
 }
 .board-node {
   cursor: pointer;
@@ -304,10 +341,10 @@ h1 {
   stroke-width: 3;
 }
 .board-node:focus-visible .focus-ring {
-  stroke: var(--accent);
+  stroke: var(--board-accent);
 }
 .board-node:hover .intersection {
-  fill: var(--accent);
+  fill: var(--board-accent);
   r: 5px;
 }
 .board-piece,
@@ -315,15 +352,15 @@ h1 {
   filter: drop-shadow(0 4px 5px #0007);
 }
 .legal-halo {
-  fill: var(--accent);
+  fill: var(--board-accent);
   opacity: 0.15;
 }
 .last-move {
-  fill: var(--accent);
+  fill: var(--board-accent);
   opacity: 0.12;
 }
 .capture-path {
-  stroke: var(--accent);
+  stroke: var(--board-accent);
   stroke-width: 3;
   stroke-dasharray: 5 7;
   opacity: 0.6;
@@ -335,7 +372,7 @@ h1 {
   justify-content: space-between;
   padding: 8px 12px 1px;
   font-size: 7px;
-  color: var(--muted);
+  color: var(--board-ink);
   letter-spacing: 2px;
 }
 .cape-compass {
@@ -349,7 +386,7 @@ h1 {
   width: 16px;
   height: 16px;
   opacity: 0.6;
-  border-color: var(--accent);
+  border-color: var(--board-accent);
 }
 .top-left {
   left: 14px;
@@ -375,7 +412,7 @@ h1 {
   gap: 9px;
 }
 .reserve-count b {
-  font-family: Georgia, serif;
+  font-family: var(--font-display);
   font-size: 30px;
   font-weight: 400;
 }
@@ -388,7 +425,7 @@ h1 {
   display: flex;
   justify-content: center;
   gap: 18px;
-  border-top: 1px solid #76949926;
+  border-top: 1px solid var(--hairline);
   margin-top: 8px;
   padding: 5px 0;
 }
@@ -410,13 +447,14 @@ h1 {
 .turn-card,
 .history-card {
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 12px;
   overflow: hidden;
   background: var(--surface);
+  box-shadow: 0 6px 22px var(--shadow);
 }
 .turn-card {
   padding: 23px;
-  border-top: 2px solid #9cd9c3b3;
+  border-top-color: var(--hairline);
 }
 .section-label {
   font-size: 9px;
@@ -439,7 +477,7 @@ h1 {
   margin-top: 19px;
 }
 .turn-title h2 {
-  font-family: Georgia, serif;
+  font-family: var(--font-display);
   font-size: 28px;
   font-weight: 400;
   margin: 0;
@@ -480,7 +518,7 @@ h1 {
 }
 .progress-track {
   height: 3px;
-  background: #37505b;
+  background: var(--line);
   margin-top: 15px;
   border-radius: 3px;
   overflow: hidden;
@@ -501,8 +539,8 @@ h1 {
   padding: 11px 22px;
 }
 .history-head {
-  border-top: 1px solid #76949926;
-  border-bottom: 1px solid #76949926;
+  border-top: 1px solid var(--hairline);
+  border-bottom: 1px solid var(--hairline);
   color: var(--muted);
   font-size: 8px;
   letter-spacing: 1.3px;
@@ -523,7 +561,7 @@ h1 {
 }
 .history-empty > span {
   font-size: 37px;
-  color: #77989e;
+  color: var(--accent);
   line-height: 1;
 }
 .history-empty p {
@@ -539,7 +577,7 @@ h1 {
     monospace;
 }
 .history-row:nth-child(even) {
-  background: #789d9e09;
+  background: var(--surface-tint);
 }
 .history-row > span:first-child {
   color: var(--muted);
@@ -548,7 +586,7 @@ h1 {
   color: var(--accent);
 }
 .session-status {
-  border-top: 1px solid #76949926;
+  border-top: 1px solid var(--hairline);
   padding: 13px 20px;
   display: flex;
   gap: 8px;
@@ -561,21 +599,28 @@ h1 {
   height: 4px;
 }
 .primary-button {
-  background: var(--accent);
-  color: #112d30;
-  font-size: 12px;
-  font-weight: 600;
-  border-radius: 6px;
-  padding: 14px 22px;
+  min-height: 44px;
+  background: var(--action);
+  color: var(--action-text);
+  border: 1px solid var(--control-line);
+  font-size: 13px;
+  font-weight: 650;
+  border-radius: 8px;
+  padding: 11px 20px;
   text-align: center;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
+  transition:
+    background-color 160ms,
+    border-color 160ms;
 }
+
 .primary-button:not(:disabled):hover {
-  background: #b6e6d2;
-  color: #102c2e;
+  background: var(--action-hover);
+  color: var(--action-text);
+  border-color: var(--control-line);
 }
 .game-actions > .primary-button {
   width: 100%;
@@ -605,14 +650,14 @@ h1 {
   gap: 13px;
   margin-top: 0;
   padding: 18px 3px 0;
-  border-top: 1px solid #76949926;
+  border-top: 1px solid var(--hairline);
 }
 .tide-tip > span {
   font-size: 25px;
   color: var(--accent);
 }
 .tide-tip h3 {
-  font-family: Georgia, serif;
+  font-family: var(--font-display);
   font-size: 16px;
   font-weight: 400;
   margin: 0 0 8px;
@@ -632,7 +677,7 @@ h1 {
   margin-left: 13px;
 }
 footer {
-  border-top: 1px solid #76949926;
+  border-top: 1px solid var(--hairline);
   margin-top: 31px;
   padding: 23px 0 28px;
   display: flex;
@@ -645,7 +690,7 @@ footer > div {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-family: Georgia, serif;
+  font-family: var(--font-display);
   font-size: 12px;
   color: var(--text);
 }
@@ -674,11 +719,11 @@ dialog {
   color: var(--text);
   border: 1px solid var(--line);
   border-radius: 12px;
-  box-shadow: 0 25px 100px #0008;
+  box-shadow: 0 25px 100px var(--shadow);
   margin: auto;
 }
 dialog::backdrop {
-  background: #030c14bd;
+  background: var(--overlay);
   backdrop-filter: blur(6px);
 }
 .dialog-heading {
@@ -688,7 +733,7 @@ dialog::backdrop {
   gap: 15px;
 }
 .dialog-heading h2 {
-  font-family: Georgia, serif;
+  font-family: var(--font-display);
   font-weight: 400;
   font-size: 27px;
   margin: 0;
@@ -715,7 +760,7 @@ dialog > p,
   border-top: 1px solid var(--line);
   padding-top: 18px;
   margin-top: 22px;
-  font-family: Georgia, serif;
+  font-family: var(--font-display);
 }
 .dialog-actions {
   display: flex;
@@ -752,8 +797,8 @@ dialog > p,
   background: var(--bg);
   padding: 12px;
   color: var(--text);
-  border: 1px solid var(--line);
-  border-radius: 5px;
+  border: 1px solid var(--control-line);
+  border-radius: 8px;
 }
 .settings-content input {
   width: 44px;
@@ -780,26 +825,13 @@ dialog > p,
 .learn-page > .primary-button {
   margin-top: 25px;
 }
+/* Board presets color the table and its highlights independently of the site. */
 .theme-sand {
-  --bg: #242a2a;
-  --surface: #303a38;
-  --surface-raised: #3b4740;
-  --board: #435148;
-  --text: #f5efdb;
-  --muted: #c1c8b9;
-  --accent: #ded5a7;
-  --line: #58655a;
-  --board-line: #b6b897;
+  --board: #494234;
+  --board-line: #ded5a7;
 }
 .theme-tigers-goats {
-  --bg: #151e18;
-  --surface: #233127;
-  --surface-raised: #2d3c2d;
   --board: #2a3d2e;
-  --text: #f4efdc;
-  --muted: #bfc6ac;
-  --accent: #e4c080;
-  --line: #4c5d45;
   --board-line: #c6c4a1;
 }
 .theme-tigers-goats .board-line {
@@ -825,9 +857,7 @@ dialog > p,
   border-radius: 18px;
   background: var(--surface);
   color: var(--text);
-  box-shadow:
-    0 20px 70px #0009,
-    0 0 35px #0003;
+  box-shadow: 0 20px 70px var(--shadow);
   animation: victory-arrive 620ms cubic-bezier(0.2, 0.8, 0.3, 1.1) both;
 }
 .victory-medallion {
@@ -852,9 +882,7 @@ dialog > p,
   margin: 18px 0 8px;
 }
 .victory-banner h2 {
-  font:
-    36px Georgia,
-    serif;
+  font: 36px var(--font-display);
   margin: 0 0 12px;
 }
 .victory-copy,
@@ -950,7 +978,7 @@ dialog > p,
   animation: piece-leap 360ms cubic-bezier(0.2, 0.6, 0.3, 1) both;
 }
 .move-trail {
-  stroke: var(--accent);
+  stroke: var(--board-accent);
   stroke-width: 3;
   stroke-linecap: round;
   stroke-dasharray: 3 9;
@@ -960,7 +988,7 @@ dialog > p,
 .arrival-ripple,
 .capture-burst {
   fill: none;
-  stroke: var(--accent);
+  stroke: var(--board-accent);
   stroke-width: 2;
   opacity: 0;
   transform-box: fill-box;
@@ -994,7 +1022,7 @@ dialog > p,
 }
 .result-glow {
   fill: none;
-  stroke: var(--accent);
+  stroke: var(--board-accent);
   stroke-width: 3;
   opacity: 0;
   animation: victory-shimmer 1100ms ease-out both;
@@ -1314,10 +1342,10 @@ dialog > p,
   width: 100%;
   min-height: 44px;
   padding: 10px;
-  border: 1px solid var(--accent);
-  border-radius: 6px;
-  background: var(--surface);
-  color: inherit;
+  border: 1px solid var(--control-line);
+  border-radius: 8px;
+  background: var(--field);
+  color: var(--text);
 }
 .online-status {
   margin-bottom: 24px;
@@ -1335,8 +1363,8 @@ dialog > p,
 }
 .online-retry {
   padding: 16px;
-  background: #163842;
-  color: #f0faf7;
+  background: var(--surface-raised);
+  color: var(--text);
 }
 
 .online-entry {
@@ -1367,16 +1395,17 @@ dialog > p,
   min-width: 44px;
   min-height: 44px;
   padding: 0 14px;
-  border: 1px solid #7bb8ad;
+  border: 1px solid var(--control-line);
   border-radius: 8px;
-  background: #bdebe0;
-  color: #102f34;
+  background: var(--beige);
+  color: var(--navy);
   font-size: 13px;
   font-weight: 700;
 }
 
 .account-link:hover {
-  background: #e2f8f0;
+  background: var(--ivory);
+  color: var(--navy);
 }
 
 .account-link svg {
@@ -1621,7 +1650,7 @@ dialog > p,
 
 .ranked-clock [data-low],
 .ranked-delta[data-loss] {
-  color: #ffc6a4;
+  color: var(--warning);
 }
 
 .ranked-delta {
@@ -1699,4 +1728,86 @@ dialog > p,
 
 .ranked-page h1 {
   overflow-wrap: anywhere;
+}
+
+.lobby-intro {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px 24px;
+  padding-block: clamp(10px, 3vw, 28px) 24px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.lobby-intro h1 {
+  font-size: clamp(2.4rem, 6vw, 4.6rem);
+  letter-spacing: -0.035em;
+  margin-block: 6px 10px;
+}
+
+.lobby-intro p:last-child {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.play-mode h2,
+.lobby-account h2,
+.ranked-lobby h2,
+.ranked-page h2,
+.academy :is(h2, h3, h4) {
+  font-family: var(--font-display);
+  font-weight: 500;
+}
+
+.play-mode h2,
+.lobby-account h2,
+.ranked-lobby h2 {
+  font-size: 1.45rem;
+}
+
+.site-theme-select {
+  display: grid;
+  align-items: start;
+  gap: 6px;
+  color: var(--muted);
+}
+
+.site-theme-select select {
+  min-height: 44px;
+  max-width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--control-line);
+  border-radius: 8px;
+  background: var(--field);
+  color: var(--text);
+  font: inherit;
+}
+
+.play-mode-actions button:not(.primary-button),
+.lobby-account > button,
+.ranked-lobby > button {
+  border: 1px solid var(--control-line);
+  border-radius: 8px;
+  background: var(--surface-raised);
+}
+
+.lobby-links a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media (max-width: 600px) {
+  .lobby-intro {
+    align-items: start;
+    gap: 14px;
+    padding-bottom: 18px;
+  }
+
+  .settings-content label {
+    flex-wrap: wrap;
+    gap: 8px 12px;
+  }
 }

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AccountLink } from "@/components/navigation/account-navigation";
+import { SiteThemeSelect } from "@/components/navigation/site-theme-select";
 import { Rules } from "@/components/game/game";
 import {
   curriculum,
@@ -154,20 +155,23 @@ export function Academy({
             <h1>Learn to Play</h1>
             <p>Learn Bagh Chal one move at a time.</p>
           </div>
-          <label>
-            Board theme
-            <select
-              value={theme}
-              onChange={(event) => {
-                if (isBoardTheme(event.target.value))
-                  changeTheme(event.target.value);
-              }}
-            >
-              <option value="ocean">Orcas &amp; Sharks · Deep ocean</option>
-              <option value="sand">Orcas &amp; Sharks · Sand table</option>
-              <option value="tigers-goats">Tigers &amp; Goats</option>
-            </select>
-          </label>
+          <div className="academy-appearance">
+            <SiteThemeSelect />
+            <label>
+              Board theme
+              <select
+                value={theme}
+                onChange={(event) => {
+                  if (isBoardTheme(event.target.value))
+                    changeTheme(event.target.value);
+                }}
+              >
+                <option value="ocean">Orcas &amp; Sharks · Deep ocean</option>
+                <option value="sand">Orcas &amp; Sharks · Sand table</option>
+                <option value="tigers-goats">Tigers &amp; Goats</option>
+              </select>
+            </label>
+          </div>
         </div>
         <nav className="academy-nav" aria-label="Academy">
           {(Object.keys(academySections) as Section[]).map((tab) => (

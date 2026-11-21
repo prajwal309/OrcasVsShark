@@ -22,6 +22,7 @@ import { VictoryBanner } from "./victory-banner";
 import { RankedClocks } from "./ranked-clocks";
 import { timeControls } from "@/lib/multiplayer/ranking";
 import { AccountLink } from "@/components/navigation/account-navigation";
+import { SiteThemeSelect } from "@/components/navigation/site-theme-select";
 import type { OnlineController } from "./online-room";
 import type { GameState, Move, NodeId, Side } from "@/lib/game/types";
 
@@ -992,6 +993,7 @@ export default function Game({
           </div>
         ) : modal === "settings" ? (
           <div className="settings-content">
+            <SiteThemeSelect />
             <label>
               Board theme
               <select

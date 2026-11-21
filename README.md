@@ -6,6 +6,8 @@ An original, ocean-themed adaptation of Bagh-Chal, the traditional asymmetric st
 
 The home screen opens the play lobby. For two players sharing a device, choose **Play locally on one device** or open `/play`. Includes an interactive SVG board, both victory conditions, keyboard play, legal destinations and capture paths, undo, move history, restart/rematch, board flip, rules, sound, three themes, motion preferences, draw agreement, resignation, and local refresh recovery.
 
+The site defaults to **Royal Navy & Gold**. Use **Site appearance** in the lobby, Academy, or game settings to switch to **Ivory & Navy**. The browser saves your selection separately from the board artwork preset.
+
 Choose **Settings → Board theme → Tigers & Goats** for original Tiger and Goat pieces on a forest table. Names, rules and announcements follow the theme. Deep ocean and Sand table remain available. Theme choices are saved on this device and can be changed during local, computer or online games without restarting.
 
 Moves include piece glides and capture leaps, arrival ripples, capture fades, and brief selection, turn and victory feedback. Animations never delay a move or block controls. Turn them off in **Settings → Animations**; the browser's reduced-motion preference always takes precedence.
