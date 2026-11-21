@@ -177,7 +177,9 @@ Vercel functions have a read-only deployment filesystem and temporary writable
 storage. With Vercel system variables exposed, the app disables SQLite and
 the ranked clock worker there. If those variables are hidden, set
 `ORCAS_DISABLE_SQLITE=1` explicitly. The homepage, local games, guest
-Academy, and `/api/health` can still load. Use the single-server deployment
-above for sign-in, ranked games, and synced progress.
+Academy, and `/api/health` can still load. The lobby shows an availability
+message in place of the sign-in and registration forms. `APP_ORIGIN`
+controls which origin can submit account actions. Account storage, ranked
+games, and synced progress require the single-server deployment above.
 [Vercel function runtimes](https://vercel.com/docs/functions/runtimes)
 [Vercel system environment variables](https://vercel.com/docs/environment-variables/system-environment-variables)

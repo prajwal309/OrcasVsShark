@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import {
   read,
   readIfAvailable,
+  requireDatabaseRuntime,
   type SqlClient,
 } from "@/lib/database/connection";
 import { RoomError } from "@/lib/multiplayer/protocol";
@@ -29,6 +30,7 @@ export function requireSameOrigin(
   request: Request,
   { allowLocalAddress = true } = {},
 ) {
+  requireDatabaseRuntime();
   const configured = appOrigin().origin;
   const origin = request.headers.get("origin");
   if (origin === configured && configured.startsWith("https://")) return true;

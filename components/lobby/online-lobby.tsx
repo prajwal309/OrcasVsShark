@@ -13,6 +13,7 @@ import {
   useAccount,
 } from "@/components/navigation/account-navigation";
 import { roomApi } from "@/lib/multiplayer/client";
+import { onlineUnavailableMessage } from "@/lib/deployment";
 import { SiteThemeSelect } from "@/components/navigation/site-theme-select";
 import type { QueueAction, QueueState } from "@/lib/multiplayer/matchmaking";
 import { roomCodeSchema } from "@/lib/multiplayer/protocol";
@@ -41,12 +42,14 @@ export function OnlineLobby({
   returnRoom,
   googleEnabled = false,
   googleError,
+  onlineUnavailable,
   register = false,
   requireSignupCode = false,
 }: {
   returnRoom?: string;
   googleEnabled?: boolean;
   googleError?: string;
+  onlineUnavailable: boolean;
   register?: boolean;
   requireSignupCode?: boolean;
 }) {
@@ -120,7 +123,7 @@ export function OnlineLobby({
   );
 
   useEffect(() => {
-    if (!account) return;
+    if (onlineUnavailable || !account) return;
     const controller = new AbortController();
     const check = () => void queue("status", controller.signal);
     const timer = searching
@@ -133,7 +136,7 @@ export function OnlineLobby({
       window.clearTimeout(timer);
       window.removeEventListener("online", check);
     };
-  }, [account, queue, searching]);
+  }, [account, onlineUnavailable, queue, searching]);
 
   async function signInWithGoogle(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
@@ -220,7 +223,7 @@ export function OnlineLobby({
               ORCAS <span className="brand-vs">vs</span> SHARKS
             </span>
           </Link>
-          <AccountLink inLobby />
+          {!onlineUnavailable && <AccountLink inLobby />}
         </div>
       </header>
       <main className="main-content online-lobby play-lobby">
@@ -239,9 +242,11 @@ export function OnlineLobby({
           >
             <h2 id="online-mode">Play online</h2>
             <p>
-              Find an opponent for an untimed, casual match or invite a friend.
+              {onlineUnavailable
+                ? onlineUnavailableMessage
+                : "Find an opponent for an untimed, casual match or invite a friend."}
             </p>
-            {account ? (
+            {onlineUnavailable ? null : account ? (
               <div className="play-mode-actions">
                 {searching === "casual" ? (
                   <button
@@ -287,70 +292,76 @@ export function OnlineLobby({
             </Link>
           </section>
         </div>
-        <section
-          className="turn-card ranked-lobby"
-          id="ranked-lobby"
-          aria-labelledby="ranked-lobby-title"
-        >
-          <div className="ranked-section-heading">
-            <h2 id="ranked-lobby-title">Ranked lobby</h2>
-            <Link href="/leaderboards">Leaderboards</Link>
-          </div>
-          <p>Choose a time control to find a player near your rating.</p>
-          <div className="ranked-quick-pair">
-            {rankedModes.map((mode) => {
-              const control = timeControls[mode];
-              const description = (
-                <>
-                  <strong>{control.name}</strong>
-                  <span>
-                    {control.minutes} + {control.increment}
-                  </span>
-                </>
-              );
-              return account ? (
-                <button
-                  key={mode}
-                  type="button"
-                  disabled={busy || queueBusy || !!searching}
-                  data-searching={searching === mode || undefined}
-                  onClick={() => void queue("enter", undefined, mode)}
-                >
-                  {description}
-                </button>
-              ) : (
-                <a
-                  key={mode}
-                  href="#online-account"
-                  aria-label={`Sign in for ${control.name} ranked play`}
-                >
-                  {description}
-                </a>
-              );
-            })}
-          </div>
-          {searching && searching !== "casual" && (
-            <button
-              type="button"
-              disabled={queueBusy}
-              onClick={() => void queue("cancel")}
-            >
-              Cancel search
-            </button>
-          )}
-          <p role="status">{queueMessage}</p>
-        </section>
+        {!onlineUnavailable && (
+          <section
+            className="turn-card ranked-lobby"
+            id="ranked-lobby"
+            aria-labelledby="ranked-lobby-title"
+          >
+            <div className="ranked-section-heading">
+              <h2 id="ranked-lobby-title">Ranked lobby</h2>
+              <Link href="/leaderboards">Leaderboards</Link>
+            </div>
+            <p>Choose a time control to find a player near your rating.</p>
+            <div className="ranked-quick-pair">
+              {rankedModes.map((mode) => {
+                const control = timeControls[mode];
+                const description = (
+                  <>
+                    <strong>{control.name}</strong>
+                    <span>
+                      {control.minutes} + {control.increment}
+                    </span>
+                  </>
+                );
+                return account ? (
+                  <button
+                    key={mode}
+                    type="button"
+                    disabled={busy || queueBusy || !!searching}
+                    data-searching={searching === mode || undefined}
+                    onClick={() => void queue("enter", undefined, mode)}
+                  >
+                    {description}
+                  </button>
+                ) : (
+                  <a
+                    key={mode}
+                    href="#online-account"
+                    aria-label={`Sign in for ${control.name} ranked play`}
+                  >
+                    {description}
+                  </a>
+                );
+              })}
+            </div>
+            {searching && searching !== "casual" && (
+              <button
+                type="button"
+                disabled={queueBusy}
+                onClick={() => void queue("cancel")}
+              >
+                Cancel search
+              </button>
+            )}
+            <p role="status">{queueMessage}</p>
+          </section>
+        )}
         <section className="turn-card lobby-account" id="online-account">
           <h2>
-            {account
-              ? "Account and private rooms"
-              : mode === "register"
-                ? "Create a player account"
-                : mode === "reset"
-                  ? "Reset your password"
-                  : "Your player account"}
+            {onlineUnavailable
+              ? "Your player account"
+              : account
+                ? "Account and private rooms"
+                : mode === "register"
+                  ? "Create a player account"
+                  : mode === "reset"
+                    ? "Reset your password"
+                    : "Your player account"}
           </h2>
-          {account ? (
+          {onlineUnavailable ? (
+            <p>Sign-in and registration require the persistent game server.</p>
+          ) : account ? (
             <>
               <p>Signed in as {account}</p>
               <Link className="ranked-text-link" href={`/players/${account}`}>

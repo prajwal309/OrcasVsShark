@@ -1,6 +1,10 @@
 import type Database from "better-sqlite3";
 import { isAbsolute } from "node:path";
-import { appOrigin, sqliteDisabled } from "@/lib/deployment";
+import {
+  appOrigin,
+  onlineUnavailableMessage,
+  sqliteDisabled,
+} from "@/lib/deployment";
 import { openDatabase } from "./sqlite.mjs";
 
 export interface SqlClient {
@@ -16,14 +20,22 @@ const runtime = globalThis as typeof globalThis & {
 };
 
 export class DatabaseUnavailableError extends Error {
-  constructor(cause?: unknown) {
-    super("Online services are temporarily unavailable.", { cause });
+  constructor(
+    cause?: unknown,
+    message = "Online services are temporarily unavailable.",
+  ) {
+    super(message, { cause });
     this.name = "DatabaseUnavailableError";
   }
 }
 
+export function requireDatabaseRuntime() {
+  if (sqliteDisabled())
+    throw new DatabaseUnavailableError(undefined, onlineUnavailableMessage);
+}
+
 export function database() {
-  if (sqliteDisabled()) throw new DatabaseUnavailableError();
+  requireDatabaseRuntime();
   if (runtime.orcasDatabase) return runtime.orcasDatabase;
   try {
     const production =

@@ -10,6 +10,7 @@ import { expect, test } from "@playwright/test";
 import { openDatabase } from "../../lib/database/sqlite.mjs";
 
 const httpsOrigin = "https://play.example.test";
+const vercelOrigin = "https://orcas-vs-shark.vercel.app";
 
 async function startServer(
   filename: string,
@@ -90,6 +91,13 @@ test("Vercel keeps public pages and liveness available without creating SQLite",
   try {
     for (const path of ["/", "/online", "/play", "/learn", "/api/health"])
       expect((await fetch(server.url + path)).status, path).toBe(200);
+    const signup = await fetch(server.url + "/online?account=register");
+    expect(signup.status).toBe(200);
+    const signupPage = await signup.text();
+    expect(signupPage).toContain(
+      "Online accounts and matches are unavailable on this deployment.",
+    );
+    expect(signupPage).not.toContain('id="account-username"');
     // A cookie from another deployment must not turn the guest Academy into a 500.
     expect(
       (
@@ -105,13 +113,21 @@ test("Vercel keeps public pages and liveness available without creating SQLite",
     );
     const readiness = await fetch(server.url + "/api/ready");
     expect(readiness.status).toBe(503);
-    const login = await server.post("/api/account", {
-      action: "login",
-      username: "existing_player",
-      password: "test password",
+    const registration = await fetch(server.url + "/api/account", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: vercelOrigin },
+      body: JSON.stringify({
+        action: "register",
+        username: "new_player",
+        password: "test password",
+        confirmPassword: "test password",
+      }),
     });
-    expect(login.status).toBe(503);
-    expect(await login.json()).toMatchObject({ code: "DATABASE_UNAVAILABLE" });
+    expect(registration.status).toBe(503);
+    expect(await registration.json()).toEqual({
+      code: "DATABASE_UNAVAILABLE",
+      error: "Online accounts and matches are unavailable on this deployment.",
+    });
     expect(existsSync(join(dir, "data"))).toBe(false);
   } finally {
     await server.stop();

@@ -1,3 +1,6 @@
+export const onlineUnavailableMessage =
+  "Online accounts and matches are unavailable on this deployment.";
+
 export function sqliteDisabled() {
   return (
     process.env.VERCEL === "1" ||
