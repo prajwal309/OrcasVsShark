@@ -16,29 +16,18 @@ private room. Share its link or eight-character code with a second player.
 Use a different browser or browser profile for that player on the same device.
 Local and computer games are available without signing in.
 
-The server opens `data/orcas.db` and applies the numbered migrations in
-`database/sqlite/` at startup. Set `SQLITE_PATH` in `.env.local` to override the
+On the first database use, the server opens `data/orcas.db` and applies the
+numbered migrations in `database/sqlite/`. Set `SQLITE_PATH` in `.env.local` to override the
 path. Relative paths resolve from the repository root. The app uses foreign keys,
 WAL mode, and a five-second busy timeout. A native build toolchain may be needed
 when the SQLite driver has no prebuilt binary for the platform.
 
 ## Run on a server
 
-Use a single self-hosted Node.js instance and a persistent local volume.
-Set `SQLITE_PATH` to a private location on that volume. Put the app behind an
-HTTPS reverse proxy and set `APP_ORIGIN` to the exact public origin, without a
-trailing slash. Both devices should use that address. HTTP origin fallback is
-limited to loopback addresses for development.
-
-```sh
-npm run build
-npm start
-```
-
-SQLite is unsuitable for distributed or multi-instance serverless hosting,
-ephemeral filesystems, and network filesystems shared between replicas. All
-online players use the same server. Keep the database and backups outside
-`public/` and grant filesystem access only to the server and its operator.
+Use one Node.js server with a writable, persistent local volume and an HTTPS
+reverse proxy. See the [deployment runbook](deployment.md) for the systemd and
+Caddy setup, `SQLITE_PATH` and `APP_ORIGIN` settings, data transfer, and
+verification steps.
 
 ## Accounts and recovery
 
@@ -124,31 +113,11 @@ To restore, stop the server, move the current database and its sidecars to a
 safe location, and restore the backup at the configured path. Restart to apply
 any pending migrations.
 
-## Import an existing PostgreSQL database
+## Running on Vercel
 
-The original SQL migrations remain in `database/migrations/`. The optional
-export/import supports a PostgreSQL source with those three migrations applied.
-Stop the old app to prevent writes after the snapshot. Run the export with a
-`psql` account allowed to read all app tables. Start with an empty SQLite
-database and keep the export private.
-
-```sh
-mkdir -p data
-umask 077
-psql -XqAt -f database/export-postgres.sql > data/postgres.ndjson
-node --env-file-if-exists=.env.local scripts/import-postgres.mjs data/postgres.ndjson
-```
-
-The export uses standard PostgreSQL client connection settings and reads a
-consistent snapshot. The importer reads the export into memory and imports it
-in one SQLite transaction. It preserves account IDs, password hashes, Google
-subjects, session hashes and expirations, room and move history, rate-limit
-records, and matchmaking data. Existing session cookies can resume when the
-browser still sends them to the app. The PostgreSQL schema had no creation time
-for accounts or sessions, so those rows receive the import time. Timestamps
-convert to Unix seconds with millisecond precision. PostgreSQL roles and row-level
-security are replaced by server-side authorization and filesystem permissions.
-Older schemas such as the anonymous Supabase prototype require a separate export.
+The full app uses a persistent SQLite database and a long-running ranked clock
+worker. See the [deployment runbook](deployment.md) for the single-server
+setup and the Vercel preview features available without SQLite.
 
 ## Verify
 

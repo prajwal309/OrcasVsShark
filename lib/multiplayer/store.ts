@@ -185,14 +185,14 @@ function settleTimeout(
     drawOffer: null,
     revision: room.revision + 1,
   };
-  const remaining = clockAt(matchClock(match), room.state.turn, now);
+  const remaining = clockAt(matchClock(match), room.state.turn, match.deadline);
   finishRankedMatch(
     db,
     room.code,
     match,
     { remaining, deadline: null },
     ending,
-    now,
+    match.deadline,
   );
   archiveRound(db, finished);
   saveRoom(db, finished, row.orcas_seen, row.sharks_seen);

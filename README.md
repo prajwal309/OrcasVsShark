@@ -44,7 +44,7 @@ npm.cmd run dev
 
 This requires no execution-policy change. Use `npm.cmd` in place of `npm` and `npx.cmd` in place of `npx` for the verification commands below as well.
 
-Open http://localhost:3000. Create a username and password to play online, or play locally without an account. The app creates and migrates `data/orcas.db` automatically. Run one Node.js instance with persistent local storage and back up the SQLite database before upgrades. See [multiplayer setup and backups](docs/multiplayer.md).
+Open http://localhost:3000. Create a username and password to play online, or play locally without an account. The app creates and migrates `data/orcas.db` automatically. Run one Node.js instance with persistent local storage and back up the SQLite database before upgrades. See [multiplayer setup](docs/multiplayer.md) and the [production deployment runbook](docs/deployment.md).
 
 ## Commit and push from Windows
 
@@ -88,7 +88,7 @@ To verify while a development server is running, build with `BUILD_OUTPUT_DIR=.n
 - [Canonical rules](docs/rules.md)
 - [Board research and citations](docs/board-research.md)
 - [Asset licenses](docs/asset-licenses.md)
-- [Preview and rollback](docs/deployment.md)
+- [Production deployment, backups, and rollback](docs/deployment.md)
 - [Online rooms and verification](docs/multiplayer.md)
 
 The framework-independent engine lives in `lib/game`. Board paths are explicit, and SVG coordinates are never used to decide legality. The local session replays moves through the canonical engine before accepting a saved snapshot. Storage is a local convenience, not trusted online state.

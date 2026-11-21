@@ -1,6 +1,9 @@
 import { sessionAccount, requireSameOrigin } from "@/lib/auth/session";
 import { ZodError } from "zod";
-import { transaction } from "@/lib/database/connection";
+import {
+  DatabaseUnavailableError,
+  transaction,
+} from "@/lib/database/connection";
 import { rateLimit } from "./store";
 import { RoomError } from "./protocol";
 
@@ -49,14 +52,20 @@ export async function respond(work: () => Promise<unknown>): Promise<Response> {
     });
   } catch (error) {
     const known = error instanceof RoomError;
+    const unavailable = error instanceof DatabaseUnavailableError;
     return Response.json(
       {
-        error: known
-          ? error.message
-          : error instanceof ZodError
-            ? "Invalid request."
-            : "The game service is unavailable. Please reconnect.",
-        code: known ? error.code : "INVALID_OR_UNAVAILABLE",
+        error:
+          known || unavailable
+            ? error.message
+            : error instanceof ZodError
+              ? "Invalid request."
+              : "The game service is unavailable. Please reconnect.",
+        code: known
+          ? error.code
+          : unavailable
+            ? "DATABASE_UNAVAILABLE"
+            : "INVALID_OR_UNAVAILABLE",
       },
       {
         status: known ? error.status : error instanceof ZodError ? 400 : 503,

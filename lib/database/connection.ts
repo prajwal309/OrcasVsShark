@@ -1,4 +1,6 @@
 import type Database from "better-sqlite3";
+import { isAbsolute } from "node:path";
+import { appOrigin, sqliteDisabled } from "@/lib/deployment";
 import { openDatabase } from "./sqlite.mjs";
 
 export interface SqlClient {
@@ -10,10 +12,39 @@ export interface SqlClient {
 
 const runtime = globalThis as typeof globalThis & {
   orcasDatabase?: Database.Database;
+  orcasDatabaseErrorReported?: boolean;
 };
 
+export class DatabaseUnavailableError extends Error {
+  constructor(cause?: unknown) {
+    super("Online services are temporarily unavailable.", { cause });
+    this.name = "DatabaseUnavailableError";
+  }
+}
+
 export function database() {
-  return (runtime.orcasDatabase ??= openDatabase());
+  if (sqliteDisabled()) throw new DatabaseUnavailableError();
+  if (runtime.orcasDatabase) return runtime.orcasDatabase;
+  try {
+    const production =
+      process.env.NODE_ENV === "production" &&
+      appOrigin().protocol === "https:";
+    const filename = process.env.SQLITE_PATH;
+    if (production && (!filename || !isAbsolute(filename)))
+      throw new Error(
+        "An absolute SQLITE_PATH on a persistent volume is required for HTTPS production.",
+      );
+    const db = openDatabase(filename || undefined, { create: !production });
+    runtime.orcasDatabase = db;
+    runtime.orcasDatabaseErrorReported = false;
+    return db;
+  } catch (error) {
+    if (!runtime.orcasDatabaseErrorReported) {
+      console.error("SQLite unavailable", error);
+      runtime.orcasDatabaseErrorReported = true;
+    }
+    throw new DatabaseUnavailableError(error);
+  }
 }
 
 export function sqlClient(db: Database.Database): SqlClient {
@@ -37,6 +68,16 @@ export function sqlClient(db: Database.Database): SqlClient {
 // Read-only queries can use WAL snapshots without acquiring a writer lock.
 export function read<T>(work: (client: SqlClient) => T): T {
   return work(sqlClient(database()));
+}
+
+export function readIfAvailable<T>(
+  work: (client: SqlClient) => T,
+): T | undefined {
+  try {
+    return read(work);
+  } catch (error) {
+    if (!(error instanceof DatabaseUnavailableError)) throw error;
+  }
 }
 
 // Acquire the write lock before reading the state that determines a mutation.

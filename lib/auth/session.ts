@@ -1,7 +1,12 @@
 import { createHash } from "node:crypto";
 import { cookies } from "next/headers";
-import { read, type SqlClient } from "@/lib/database/connection";
+import {
+  read,
+  readIfAvailable,
+  type SqlClient,
+} from "@/lib/database/connection";
 import { RoomError } from "@/lib/multiplayer/protocol";
+import { appOrigin } from "@/lib/deployment";
 
 export const sessionCookie = "orcas_session";
 export const sessionSeconds = 60 * 60 * 24 * 14;
@@ -24,7 +29,7 @@ export function requireSameOrigin(
   request: Request,
   { allowLocalAddress = true } = {},
 ) {
-  const configured = process.env.APP_ORIGIN ?? "http://localhost:3000";
+  const configured = appOrigin().origin;
   const origin = request.headers.get("origin");
   if (origin === configured && configured.startsWith("https://")) return true;
 
@@ -68,10 +73,10 @@ export async function currentToken() {
   return (await cookies()).get(sessionCookie)?.value;
 }
 
-export async function sessionAccount() {
+export async function sessionAccount({ allowUnavailable = false } = {}) {
   const token = await currentToken();
   if (!token || !/^[a-f0-9]{64}$/.test(token)) return null;
-  return read((db) => {
+  const lookup = (db: SqlClient) => {
     const { rows } = db.query<{ id: string; username: string }>(
       `SELECT a.id, a.username FROM account_sessions s
        JOIN accounts a ON a.id = s.account_id
@@ -79,5 +84,6 @@ export async function sessionAccount() {
       [hashToken(token)],
     );
     return rows[0] ?? null;
-  });
+  };
+  return (allowUnavailable ? readIfAvailable(lookup) : read(lookup)) ?? null;
 }

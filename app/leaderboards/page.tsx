@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { read } from "@/lib/database/connection";
+import { readIfAvailable } from "@/lib/database/connection";
 import { leaderboard } from "@/lib/multiplayer/ratings-store";
 import { rankedModes, timeControls } from "@/lib/multiplayer/ranking";
 
@@ -12,7 +12,7 @@ export default async function Leaderboards({
 }) {
   const { mode: requested } = await searchParams;
   const mode = rankedModes.find((choice) => choice === requested) ?? "fast";
-  const leaders = read((db) => leaderboard(db, mode));
+  const leaders = readIfAvailable((db) => leaderboard(db, mode));
 
   return (
     <div className="site-shell theme-ocean">
@@ -36,7 +36,9 @@ export default async function Leaderboards({
           className="turn-card"
           aria-label={`${timeControls[mode].name} leaderboard`}
         >
-          {leaders.length ? (
+          {!leaders ? (
+            <p>Ranked leaderboards are temporarily unavailable.</p>
+          ) : leaders.length ? (
             <div className="ranked-table-scroll">
               <table className="ranked-table">
                 <thead>

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { usernameSchema } from "@/lib/auth/accounts";
-import { read } from "@/lib/database/connection";
+import { readIfAvailable } from "@/lib/database/connection";
 import { playerProfile } from "@/lib/multiplayer/ratings-store";
 import {
   initialRating,
@@ -18,8 +18,19 @@ export default async function Player({
 }) {
   const parsed = usernameSchema.safeParse((await params).username);
   if (!parsed.success) notFound();
-  const player = read((db) => playerProfile(db, parsed.data));
-  if (!player) notFound();
+  const player = readIfAvailable((db) => playerProfile(db, parsed.data));
+  if (player === null) notFound();
+  if (!player) {
+    return (
+      <main className="main-content ranked-page">
+        <Link className="ranked-text-link" href="/#ranked-lobby">
+          ← Ranked lobby
+        </Link>
+        <h1>Player profile</h1>
+        <p>Ranked player profiles are temporarily unavailable.</p>
+      </main>
+    );
+  }
 
   return (
     <div className="site-shell theme-ocean">

@@ -15,6 +15,7 @@
     "format:check": "prettier --check .",
     "check": "npm run typecheck && npm run lint && npm test && npm run build && npm run test:e2e && npm run test:online",
     "test:online": "node scripts/test-online.mjs",
+    "db:prepare": "node --env-file-if-exists=.env.local scripts/prepare-sqlite.mjs",
     "account:code": "node --env-file-if-exists=.env.local scripts/account-code.mjs"
   },
   "dependencies": {

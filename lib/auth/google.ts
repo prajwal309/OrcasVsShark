@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { z } from "zod";
 import { usernameSchema } from "./accounts";
+import { appOrigin, sqliteDisabled } from "@/lib/deployment";
 import { roomCodeSchema, RoomError } from "@/lib/multiplayer/protocol";
 
 export function googleCookie(secure: boolean) {
@@ -21,8 +22,13 @@ export const googleAttemptSchema = z.strictObject({
 export function googleConfiguration() {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  if (!clientId || !clientSecret) return null;
-  const origin = process.env.APP_ORIGIN ?? "http://localhost:3000";
+  if (!clientId || !clientSecret || sqliteDisabled()) return null;
+  let origin: string;
+  try {
+    origin = appOrigin().origin;
+  } catch {
+    return null;
+  }
   return {
     clientId,
     clientSecret,
