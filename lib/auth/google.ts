@@ -21,7 +21,7 @@ export const googleAttemptSchema = z.strictObject({
 export function googleConfiguration() {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  if (!clientId || !clientSecret || !process.env.DATABASE_URL) return null;
+  if (!clientId || !clientSecret) return null;
   const origin = process.env.APP_ORIGIN ?? "http://localhost:3000";
   return {
     clientId,

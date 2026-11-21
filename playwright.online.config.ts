@@ -14,16 +14,9 @@ export default defineConfig({
       use: { ...devices["iPhone 13"], defaultBrowserType: "chromium" },
     },
   ],
-  webServer: [
-    {
-      command: "node tests/support/online-services.mjs",
-      url: "http://127.0.0.1:54321/health",
-      reuseExistingServer: false,
-    },
-    {
-      command: "npm start -- --hostname 127.0.0.1 --port 3100",
-      url: "http://127.0.0.1:3100",
-      reuseExistingServer: false,
-    },
-  ],
+  webServer: {
+    command: "npm start -- --hostname 127.0.0.1 --port 3100",
+    url: "http://127.0.0.1:3100",
+    reuseExistingServer: false,
+  },
 });

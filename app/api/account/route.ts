@@ -5,6 +5,7 @@ import {
   currentToken,
   hashToken,
   requireSameOrigin,
+  replaceSession,
   sessionAccount,
   sessionCookie,
   sessionSeconds,
@@ -14,20 +15,22 @@ import {
   invalidInvitation,
   invitationSchema as invitation,
   usernameSchema as username,
+  signupCodeRequired,
 } from "@/lib/auth/accounts";
-import { transaction } from "@/lib/database/connection";
+import { read, transaction } from "@/lib/database/connection";
 import { readJson, respond } from "@/lib/multiplayer/http";
 import { RoomError } from "@/lib/multiplayer/protocol";
 
 export const runtime = "nodejs";
-const password = z.string().min(12).max(128);
+const password = z.string().min(1).max(128);
 const input = z.discriminatedUnion("action", [
   z.strictObject({ action: z.literal("login"), username, password }),
   z.strictObject({
     action: z.literal("register"),
     username,
     password,
-    invitation,
+    confirmPassword: password,
+    invitation: invitation.optional(),
   }),
   z.strictObject({ action: z.literal("reset"), password, invitation }),
   z.strictObject({ action: z.literal("logout") }),
@@ -55,15 +58,15 @@ async function derive(secret: string, salt: string): Promise<Buffer> {
   }
 }
 
-async function limit(bucket: string, maximum: number) {
-  const hits = await transaction(async (db) => {
-    const { rows } = await db.query<{ hits: number }>(
-      `INSERT INTO account_rate_limits VALUES ($1, now(), 1)
+function limit(bucket: string, maximum: number) {
+  const hits = transaction((db) => {
+    const { rows } = db.query<{ hits: number }>(
+      `INSERT INTO account_rate_limits VALUES ($1, unixepoch('subsec'), 1)
        ON CONFLICT (bucket) DO UPDATE SET
-         hits = CASE WHEN account_rate_limits.starts_at <= now() - interval '1 minute'
+         hits = CASE WHEN account_rate_limits.starts_at <= unixepoch('subsec') - 60
            THEN 1 ELSE account_rate_limits.hits + 1 END,
-         starts_at = CASE WHEN account_rate_limits.starts_at <= now() - interval '1 minute'
-           THEN now() ELSE account_rate_limits.starts_at END
+         starts_at = CASE WHEN account_rate_limits.starts_at <= unixepoch('subsec') - 60
+           THEN unixepoch('subsec') ELSE account_rate_limits.starts_at END
        RETURNING hits`,
       [bucket],
     );
@@ -82,7 +85,42 @@ export function GET() {
 export async function POST(request: Request) {
   return respond(async () => {
     const secure = requireSameOrigin(request);
-    const body = input.parse(await readJson(request));
+    const parsed = input.safeParse(await readJson(request));
+    if (!parsed.success) {
+      if (parsed.error.issues.some((issue) => issue.path[0] === "username"))
+        throw new RoomError(
+          400,
+          "INVALID_USERNAME",
+          "Use 3–24 letters, digits, or underscores.",
+        );
+      if (parsed.error.issues.some((issue) => issue.path[0] === "invitation"))
+        throw invalidInvitation();
+      if (parsed.error.issues.some((issue) => issue.path[0] === "password"))
+        throw new RoomError(
+          400,
+          "INVALID_PASSWORD",
+          "Enter a password of up to 128 characters.",
+        );
+      throw parsed.error;
+    }
+    const body = parsed.data;
+    if (body.action === "register" || body.action === "reset") {
+      if (body.password.length < 8)
+        throw new RoomError(
+          400,
+          "INVALID_PASSWORD",
+          "Use at least 8 characters for your password.",
+        );
+      if (body.action === "register") {
+        if (body.password !== body.confirmPassword)
+          throw new RoomError(
+            400,
+            "PASSWORD_MISMATCH",
+            "Passwords do not match.",
+          );
+        if (signupCodeRequired() && !body.invitation) throw invalidInvitation();
+      }
+    }
     const previous = await currentToken();
     const jar = await cookies();
     const attributes = {
@@ -93,7 +131,7 @@ export async function POST(request: Request) {
     };
     if (body.action === "logout") {
       if (previous)
-        await transaction((db) =>
+        transaction((db) =>
           db.query("DELETE FROM account_sessions WHERE token_hash = $1", [
             hashToken(previous),
           ]),
@@ -102,11 +140,11 @@ export async function POST(request: Request) {
       return { username: null };
     }
 
-    await limit("auth", 30);
+    limit("auth", 30);
     const login =
       body.action === "login"
-        ? await transaction(async (db) => {
-            const { rows } = await db.query<{
+        ? read((db) => {
+            const { rows } = db.query<{
               id: string;
               password_hash: string | null;
             }>("SELECT id, password_hash FROM accounts WHERE username = $1", [
@@ -119,18 +157,20 @@ export async function POST(request: Request) {
       login?.password_hash?.split(":")[0] ?? randomBytes(16).toString("hex");
     const key = await derive(body.password, salt);
     const digest = `${salt}:${key.toString("hex")}`;
+    const savedDigest = Buffer.from(login?.password_hash ?? "");
+    const derivedDigest = Buffer.from(digest);
     if (
       body.action === "login" &&
-      (!login?.password_hash ||
-        !timingSafeEqual(Buffer.from(login.password_hash), Buffer.from(digest)))
+      (savedDigest.length !== derivedDigest.length ||
+        !timingSafeEqual(savedDigest, derivedDigest))
     )
       throw invalid();
 
     const token = randomBytes(32).toString("hex");
-    const name = await transaction(async (db) => {
+    const name = transaction((db) => {
       if (body.action === "login") {
-        const account = await db.query(
-          "SELECT id FROM accounts WHERE id = $1 AND password_hash = $2 FOR UPDATE",
+        const account = db.query(
+          "SELECT id FROM accounts WHERE id = $1 AND password_hash = $2",
           [login!.id, digest],
         );
         if (!account.rowCount) throw invalid();
@@ -138,35 +178,32 @@ export async function POST(request: Request) {
       let id = login?.id;
       let name = "username" in body ? body.username : "";
       if (body.action === "register") {
-        id = await createAccount(db, name, hashToken(body.invitation), {
-          passwordHash: digest,
-        });
+        id = createAccount(
+          db,
+          name,
+          body.invitation && hashToken(body.invitation),
+          {
+            passwordHash: digest,
+          },
+        );
       } else if (body.action === "reset") {
-        const invite = await db.query<{ reset_account: string }>(
-          `DELETE FROM account_invites WHERE token_hash = $1 AND expires_at > now()
+        const invite = db.query<{ reset_account: string }>(
+          `DELETE FROM account_invites WHERE token_hash = $1 AND expires_at > unixepoch('subsec')
            AND reset_account IS NOT NULL RETURNING reset_account`,
           [hashToken(body.invitation)],
         );
         if (!invite.rowCount) throw invalidInvitation();
         id = invite.rows[0].reset_account;
-        const updated = await db.query<{ username: string }>(
+        const updated = db.query<{ username: string }>(
           "UPDATE accounts SET password_hash = $2 WHERE id = $1 AND password_hash IS NOT NULL RETURNING username",
           [id, digest],
         );
         if (!updated.rowCount) throw invalidInvitation();
         name = updated.rows[0].username;
-        await db.query("DELETE FROM account_sessions WHERE account_id = $1", [
-          id,
-        ]);
+        db.query("DELETE FROM account_sessions WHERE account_id = $1", [id]);
       }
-      if (previous)
-        await db.query("DELETE FROM account_sessions WHERE token_hash = $1", [
-          hashToken(previous),
-        ]);
-      await db.query(
-        "INSERT INTO account_sessions VALUES ($1, $2, now() + $3 * interval '1 second')",
-        [hashToken(token), id, sessionSeconds],
-      );
+      if (!id) throw invalid();
+      replaceSession(db, id, token, previous);
       return name;
     });
     jar.set(sessionCookie, token, { ...attributes, maxAge: sessionSeconds });

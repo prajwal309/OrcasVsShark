@@ -1,137 +1,133 @@
-# Self-hosted casual multiplayer
+# Self-hosted multiplayer
 
-The home page opens the play lobby. Next.js handles sign-in, casual matchmaking, and private rooms at `/` and `/online`. PostgreSQL stores
-accounts, sessions, games, and moves. Players can sign in from another browser
-or device and reclaim their seat with the same account.
+## Run locally
 
-## Start on localhost
-
-Use Node.js 22 and a running local PostgreSQL instance with the `psql` client.
-Run the setup from the repository root. The PostgreSQL administrator account
-is often `postgres` or the local operating system username.
-
-1. Open `psql -d postgres` as your PostgreSQL administrator. Create a dedicated
-   database and application login. The password command prompts without
-   embedding the password in the SQL.
-
-   ```sql
-   CREATE ROLE orcas_app LOGIN;
-   \password orcas_app
-   CREATE DATABASE orcas_dev;
-   ```
-
-   Enter `\q` to exit. Apply the migration and grants once as the database
-   owner or administrator.
-
-   ```sh
-   psql -d orcas_dev -v ON_ERROR_STOP=1 -f database/migrations/001_multiplayer.sql
-   psql -d orcas_dev -v ON_ERROR_STOP=1 -f database/grant-local-app.sql
-   psql -d orcas_dev -v ON_ERROR_STOP=1 -f database/migrations/002_matchmaking.sql
-   psql -d orcas_dev -v ON_ERROR_STOP=1 -f database/migrations/003_google_accounts.sql
-   ```
-
-2. Copy `.env.example` to `.env.local` and set the connection string. Replace
-   `replace-me` with the application role password. URL-encode special
-   characters in the password.
-
-   ```dotenv
-   DATABASE_URL=postgresql://orcas_app:replace-me@127.0.0.1:5432/orcas_dev
-   APP_ORIGIN=http://localhost:3000
-   ```
-
-3. Install dependencies, issue one signup code per player, and start the app.
-
-   ```sh
-   npm ci
-   npm run account:code -- invite
-   npm run account:code -- invite
-   npm run dev
-   ```
-
-4. Open <http://localhost:3000/> in two browser profiles or a regular and
-   a private window. Select **Login** next to the logo, then choose
-   **Use a signup code** in each. Enter a distinct
-   username, a password of at least 12 characters, and one of the codes.
-   Select **Find opponent** in both profiles to pair through the lobby. To
-   play privately instead, select **Create Game** in the first browser and
-   open the room link in the second. Sharks move first in both modes.
-
-After sign-in, your username appears next to the logo. Select it to return to
-the online lobby or sign out.
-
-Local two-player and computer play at `/play` need no account or database.
-`localhost` reaches only the machine running the browser. For another device,
-serve Next.js behind HTTPS on a reachable address and set `APP_ORIGIN` to
-that exact origin with no trailing slash. Keep PostgreSQL private.
-
-## Matchmaking
-
-For an existing self-hosted database, apply only
-`database/migrations/002_matchmaking.sql` as the database owner before updating the
-app. It adds the queue and grants access to the existing `orcas_app` role.
-
-The queue matches the oldest active opponent. The first player takes Orcas
-and the second takes Sharks. The lobby checks for a match about once per second
-and opens the shared room automatically. Canceling removes an unmatched entry.
-Waiting entries expire after 20 seconds without a heartbeat. Reloading before
-expiry resumes the search. If a room was created while a player was briefly
-offline, the lobby retains their assignment for up to 10 minutes or until
-they open the room.
-
-## Optional Google sign-in
-
-For an existing database, apply `database/migrations/003_google_accounts.sql`
-after the matchmaking migration. Username and password signup also uses the
-updated schema.
-
-Create a **Web application** OAuth client in Google Cloud. Register
-`http://localhost:3000/api/account/google/callback` as an authorized redirect URI,
-or use the exact HTTPS `APP_ORIGIN` followed by `/api/account/google/callback`
-for a hosted environment. If the OAuth app is in testing mode, add the Google
-accounts you plan to use as test users. Put the client ID and secret in
-`.env.local` as `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, then restart
-Next.js. [Google OAuth web server setup](https://developers.google.com/identity/protocols/oauth2/web-server)
-
-Choose **Create account with Google** the first time and supply an available
-username and a single-use signup code. Choose **Sign in with Google** on
-subsequent visits. The app stores Google's stable account identifier. Existing
-password accounts keep their usernames and credentials. Google sign-in cannot
-claim a password account by matching names. A duplicate username leaves the
-signup code usable with a different username.
-
-## Accounts and rooms
-
-Signup codes expire after 24 hours and can be used once. To help a player
-recover access, issue a reset code and share it privately.
+Use Node.js 22 from the repository root.
 
 ```sh
+npm ci
+npm run dev
+```
+
+Open `http://localhost:3000`. Select **Create an account** and enter a unique
+username, a password of at least eight characters, and the same password again.
+Sign in and choose **Find opponent** for matchmaking or **Create Game** for a
+private room. Share its link or eight-character code with a second player.
+Use a different browser or browser profile for that player on the same device.
+Local and computer games are available without signing in.
+
+The server opens `data/orcas.db` and applies the numbered migrations in
+`database/sqlite/` at startup. Set `SQLITE_PATH` in `.env.local` to override the
+path. Relative paths resolve from the repository root. The app uses foreign keys,
+WAL mode, and a five-second busy timeout. A native build toolchain may be needed
+when the SQLite driver has no prebuilt binary for the platform.
+
+## Run on a server
+
+Use a single self-hosted Node.js instance and a persistent local volume.
+Set `SQLITE_PATH` to a private location on that volume. Put the app behind an
+HTTPS reverse proxy and set `APP_ORIGIN` to the exact public origin, without a
+trailing slash. Both devices should use that address. HTTP origin fallback is
+limited to loopback addresses for development.
+
+```sh
+npm run build
+npm start
+```
+
+SQLite is unsuitable for distributed or multi-instance serverless hosting,
+ephemeral filesystems, and network filesystems shared between replicas. All
+online players use the same server. Keep the database and backups outside
+`public/` and grant filesystem access only to the server and its operator.
+
+## Accounts and recovery
+
+Password signup is open by default. Set `REQUIRE_SIGNUP_CODE=true` to require a
+single-use signup code. Codes issued with the command below expire after 24 hours.
+
+```sh
+npm run account:code -- invite
 npm run account:code -- reset PLAYER_USERNAME
 ```
 
-The player chooses **Use a reset code** at `/online` and enters a new password.
-The code expires after 30 minutes and using it revokes the account's existing
-sessions. The player keeps their account ID and room seats.
+Share reset codes privately. The player chooses **Use a reset code** at
+`/online` and sets a new password. The code expires after 30 minutes, can be used
+once, and revokes all of the player's previous sessions while keeping their
+account ID and room seats.
 
-Passwords use salted scrypt hashes. Session tokens are stored as hashes in
-PostgreSQL and sent to the browser in HTTP-only cookies that expire after
-14 days. HTTPS origins use Secure cookies. Account endpoints rate-limit
-credential attempts and mutation endpoints check the browser's origin.
+Google sign-in is enabled only when both `GOOGLE_CLIENT_ID` and
+`GOOGLE_CLIENT_SECRET` are set. Register the exact `APP_ORIGIN` plus
+`/api/account/google/callback` as the authorized redirect URI for the Google OAuth
+web client. A first-time Google account always requires a signup code. Existing
+Google accounts are identified by their provider subject.
 
-The app resolves the player from the session before reading or changing a
-room. A move transaction checks the seat, turn, revision, and ply, validates the
-move with the rules engine, and commits the move and snapshot together. Request
-IDs make retries idempotent. Browsers poll every two seconds and refresh
-on focus or reconnect. A disconnect updates presence and does not forfeit
+Passwords use salted scrypt. SQLite keeps only the SHA-256 hash of each random
+session token. Cookies are HttpOnly and SameSite=Lax, with Secure enabled on
+HTTPS. Sessions expire after 14 days and the browser receives a fresh token when
+it authenticates. Authentication and room requests are rate-limited, and
+mutation requests require a matching browser origin.
+
+## Rooms and storage
+
+Room actions use an immediate SQLite write transaction. The server checks the
+player's seat, turn, revision, and ply, then validates moves with the rules engine.
+The snapshot, move history, and request receipt commit together. Replaying a
+request ID returns the current view without applying the action again. Browsers
+poll for updates and refresh on focus or reconnect. A disconnect does not forfeit
 the game.
 
-The first migration initializes a fresh database. If you have an older Supabase
-database with games to preserve, keep a backup. Transferring games or claiming
-anonymous seats under named accounts requires a separate migration.
+The schema keeps accounts, sessions, signup and reset codes, and rate-limit
+buckets. Games store player IDs, state, derived status, and timestamps. Moves
+are append-only, completed rounds are archived before rematches, and matchmaking
+entries and request receipts are persisted separately.
+
+## Backups and restore
+
+Back up before upgrading or applying new migrations. Use SQLite's online backup
+command, or stop the server before copying a database file and keep its WAL
+and SHM sidecars together if they are present. Copying the main file alone while
+the app is running can miss committed transactions. Run the following with the
+SQLite CLI against your configured path, and protect the resulting file like the
+live database.
+
+```sh
+sqlite3 data/orcas.db ".backup data/orcas-backup.db"
+```
+
+To restore, stop the server, move the current database and its sidecars to a
+safe location, and restore the backup at the configured path. Restart to apply
+any pending migrations.
+
+## Import an existing PostgreSQL database
+
+The original SQL migrations remain in `database/migrations/`. The optional
+export/import supports a PostgreSQL source with those three migrations applied.
+Stop the old app to prevent writes after the snapshot. Run the export with a
+`psql` account allowed to read all app tables. Start with an empty SQLite
+database and keep the export private.
+
+```sh
+mkdir -p data
+umask 077
+psql -XqAt -f database/export-postgres.sql > data/postgres.ndjson
+node --env-file-if-exists=.env.local scripts/import-postgres.mjs data/postgres.ndjson
+```
+
+The export uses standard PostgreSQL client connection settings and reads a
+consistent snapshot. The importer reads the export into memory and imports it
+in one SQLite transaction. It preserves account IDs, password hashes, Google
+subjects, session hashes and expirations, room and move history, rate-limit
+records, and matchmaking data. Existing session cookies can resume when the
+browser still sends them to the app. The PostgreSQL schema had no creation time
+for accounts or sessions, so those rows receive the import time. Timestamps
+convert to Unix seconds with millisecond precision. PostgreSQL roles and row-level
+security are replaced by server-side authorization and filesystem permissions.
+Older schemas such as the anonymous Supabase prototype require a separate export.
 
 ## Verify
 
-`npm run test:online` runs the production Next.js API with an isolated
-PostgreSQL-compatible PGlite test database. It exercises account signup,
-sign-in from another browser, seat recovery, reset and revocation, matchmaking and room sync,
-both game victories, draws, resignation, and rematches. Use the localhost setup
-above to verify your own PostgreSQL instance and application-role credentials.
+`npm run test:online` builds and starts the production app using an isolated
+temporary SQLite database, then runs the multiplayer and account suite in
+desktop and mobile Chromium. The suite covers both game victories, concurrent
+moves, replay protection, reconnects, draws, resignation, rematches, private-room
+access, matchmaking, and account session lifecycle.

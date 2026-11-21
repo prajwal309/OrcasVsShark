@@ -14,7 +14,7 @@ A victory card announces the winning side with a short celebration. **Play again
 
 Choose **Set up a computer game** from the lobby, or **Play against computer** on the local board. Choose your side and difficulty, then select **Start game**. Play either Orcas or Sharks at Easy, Medium or Hard difficulty. Search runs in a Web Worker, and games resume on refresh. Undo takes back your last move and the computer's reply. See [computer play](docs/computer.md).
 
-Sign in to find a casual opponent or create a private invite room. Online play uses self-hosted PostgreSQL and supports server-authoritative moves, reconnects, draw offers, resignation, and mutual rematches. See [multiplayer setup](docs/multiplayer.md). Analysis, clocks and rated play remain future work.
+Sign in to find a casual opponent or create a private invite room. Online play uses a local SQLite database and supports server-authoritative moves, reconnects, draw offers, resignation, and mutual rematches. See [multiplayer setup](docs/multiplayer.md). Analysis, clocks and rated play remain future work.
 
 ## Run
 
@@ -34,7 +34,7 @@ npm.cmd run dev
 
 This requires no execution-policy change. Use `npm.cmd` in place of `npm` and `npx.cmd` in place of `npx` for the verification commands below as well.
 
-Open http://localhost:3000. Local play needs no credentials. Online play requires a PostgreSQL database, the multiplayer migrations, and the configuration in `.env.example`. See [multiplayer setup](docs/multiplayer.md).
+Open http://localhost:3000. Create a username and password to play online, or play locally without an account. The app creates and migrates `data/orcas.db` automatically. Run one Node.js instance with persistent local storage and back up the SQLite database before upgrades. See [multiplayer setup and backups](docs/multiplayer.md).
 
 ## Commit and push from Windows
 

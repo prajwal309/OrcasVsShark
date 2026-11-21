@@ -7,8 +7,11 @@ export const usernameSchema = z
   .string()
   .trim()
   .toLowerCase()
-  .regex(/^[a-z0-9_]{3,24}$/);
+  .regex(/^[a-z0-9_]{3,24}$/, "Use 3–24 letters, digits, or underscores.");
 export const invitationSchema = z.string().regex(/^[a-f0-9]{64}$/);
+
+export const signupCodeRequired = () =>
+  process.env.REQUIRE_SIGNUP_CODE === "true";
 
 export function invalidInvitation() {
   return new RoomError(
@@ -18,21 +21,23 @@ export function invalidInvitation() {
   );
 }
 
-export async function createAccount(
+export function createAccount(
   db: SqlClient,
   username: string,
-  invitationHash: string,
+  invitationHash: string | undefined,
   credential: { passwordHash: string } | { googleSubject: string },
 ) {
-  const invitation = await db.query(
-    `DELETE FROM account_invites WHERE token_hash = $1
-     AND reset_account IS NULL AND expires_at > now()`,
-    [invitationHash],
-  );
-  if (!invitation.rowCount) throw invalidInvitation();
+  if (invitationHash) {
+    const invitation = db.query(
+      `DELETE FROM account_invites WHERE token_hash = $1
+     AND reset_account IS NULL AND expires_at > unixepoch('subsec')`,
+      [invitationHash],
+    );
+    if (!invitation.rowCount) throw invalidInvitation();
+  }
 
   const id = randomUUID();
-  const inserted = await db.query(
+  const inserted = db.query(
     `INSERT INTO accounts (id, username, password_hash, google_subject)
      VALUES ($1, $2, $3, $4) ON CONFLICT (username) DO NOTHING`,
     [
@@ -51,17 +56,14 @@ export async function createAccount(
   return id;
 }
 
-export async function googleAccount(
+export function googleAccount(
   db: SqlClient,
   subject: string,
   signup?: { username: string; invitationHash: string },
 ) {
-  await db.query("SELECT pg_advisory_xact_lock(825015, hashtext($1))", [
-    subject,
-  ]);
   const {
     rows: [existing],
-  } = await db.query<{ id: string }>(
+  } = db.query<{ id: string }>(
     "SELECT id FROM accounts WHERE google_subject = $1",
     [subject],
   );

@@ -1,40 +1,48 @@
-import { Pool, type QueryResultRow } from "pg";
+import type Database from "better-sqlite3";
+import { openDatabase } from "./sqlite.mjs";
 
 export interface SqlClient {
-  query<T extends QueryResultRow = QueryResultRow>(
+  query<T = unknown>(
     sql: string,
-    values?: unknown[],
-  ): Promise<{ rows: T[]; rowCount: number | null }>;
+    values?: (string | number | null)[],
+  ): { rows: T[]; rowCount: number };
 }
-let pool: Pool | undefined;
-export async function transaction<T>(
-  work: (client: SqlClient) => Promise<T>,
-): Promise<T> {
-  const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) throw new Error("DATABASE_URL is not configured.");
-  if (!pool) {
-    pool = new Pool({
-      connectionString,
-      max: 3,
-      connectionTimeoutMillis: 5000,
-      idleTimeoutMillis: 10000,
-    });
-    // pg emits idle-connection errors outside query promises. Never log the
-    // attached client/config object: it contains connection credentials.
-    pool.on("error", () => console.error("Database connection interrupted."));
-  }
 
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-    await client.query("SET LOCAL statement_timeout = '8s'");
-    const value = await work(client);
-    await client.query("COMMIT");
-    return value;
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally {
-    client.release();
-  }
+const runtime = globalThis as typeof globalThis & {
+  orcasDatabase?: Database.Database;
+};
+
+export function database() {
+  return (runtime.orcasDatabase ??= openDatabase());
+}
+
+export function sqlClient(db: Database.Database): SqlClient {
+  return {
+    query<T>(sql: string, values: (string | number | null)[] = []) {
+      const statement = db.prepare<Record<string, string | number | null>, T>(
+        sql,
+      );
+      const bindings = Object.fromEntries(
+        values.map((value, index) => [index + 1, value]),
+      );
+      if (statement.reader) {
+        const rows = statement.all(bindings);
+        return { rows, rowCount: rows.length };
+      }
+      return { rows: [], rowCount: statement.run(bindings).changes };
+    },
+  };
+}
+
+// Read-only queries can use WAL snapshots without acquiring a writer lock.
+export function read<T>(work: (client: SqlClient) => T): T {
+  return work(sqlClient(database()));
+}
+
+// Acquire the write lock before reading the state that determines a mutation.
+export function transaction<T>(
+  work: (client: SqlClient) => T extends PromiseLike<unknown> ? never : T,
+): T {
+  const db = database();
+  return db.transaction(() => work(sqlClient(db))).immediate();
 }

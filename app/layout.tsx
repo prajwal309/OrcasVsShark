@@ -11,9 +11,7 @@ export const metadata: Metadata = {
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  const account = process.env.DATABASE_URL
-    ? await sessionAccount().catch(() => null)
-    : null;
+  const account = await sessionAccount().catch(() => null);
   return (
     <html lang="en">
       {/* Browser extensions (such as Grammarly) add body attributes before hydration.

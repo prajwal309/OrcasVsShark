@@ -35,10 +35,14 @@ export function OnlineLobby({
   returnRoom,
   googleEnabled = false,
   googleError,
+  register = false,
+  requireSignupCode = false,
 }: {
   returnRoom?: string;
   googleEnabled?: boolean;
   googleError?: string;
+  register?: boolean;
+  requireSignupCode?: boolean;
 }) {
   const router = useRouter();
   const [code, setCode] = useState("");
@@ -48,7 +52,9 @@ export function OnlineLobby({
   const { username: account, setUsername: setAccount } = useAccount();
   const [mode, setMode] = useState<
     "login" | "register" | "reset" | "google-register"
-  >("login");
+  >(register ? "register" : "login");
+  const loginLink = returnRoom ? `/online?room=${returnRoom}` : "/online";
+  const registerLink = `/online?account=register${returnRoom ? `&room=${returnRoom}` : ""}#online-account`;
 
   const [searching, setSearching] = useState(false);
   const [queueBusy, setQueueBusy] = useState(false);
@@ -171,6 +177,8 @@ export function OnlineLobby({
       }
       requestId.current = null;
       if (data.username && returnRoom) router.push(`/game/${returnRoom}`);
+      else if (data.username && register) router.replace("/online");
+      if (!data.username) setMode("login");
     } catch (error) {
       setMessage(
         error instanceof Error ? error.message : "Account request failed.",
@@ -271,7 +279,11 @@ export function OnlineLobby({
         </div>
         <section className="turn-card lobby-account" id="online-account">
           <h2>
-            {account ? "Account and private rooms" : "Your player account"}
+            {account
+              ? "Account and private rooms"
+              : mode === "register"
+                ? "Create a player account"
+                : "Your player account"}
           </h2>
           {account ? (
             <>
@@ -347,7 +359,7 @@ export function OnlineLobby({
                       id="account-password"
                       name="password"
                       type="password"
-                      minLength={12}
+                      minLength={mode === "login" ? undefined : 8}
                       maxLength={128}
                       autoComplete={
                         mode === "login" ? "current-password" : "new-password"
@@ -356,7 +368,25 @@ export function OnlineLobby({
                     />
                   </>
                 )}
-                {mode !== "login" && (
+                {mode === "register" && (
+                  <>
+                    <label htmlFor="account-confirm-password">
+                      Confirm password
+                    </label>
+                    <input
+                      id="account-confirm-password"
+                      name="confirmPassword"
+                      type="password"
+                      minLength={8}
+                      maxLength={128}
+                      autoComplete="new-password"
+                      required
+                    />
+                  </>
+                )}
+                {(mode === "reset" ||
+                  mode === "google-register" ||
+                  (mode === "register" && requireSignupCode)) && (
                   <>
                     <label htmlFor="account-invitation">
                       {mode === "reset" ? "Reset code" : "Signup code"}
@@ -385,7 +415,12 @@ export function OnlineLobby({
                         : "Reset password"}
                 </button>
               </form>
-              {mode !== "login" && (
+              {mode === "register" && (
+                <Link href={`${loginLink}#online-account`}>
+                  Back to sign in
+                </Link>
+              )}
+              {mode !== "login" && mode !== "register" && (
                 <button disabled={busy} onClick={() => setMode("login")}>
                   Back to sign in
                 </button>
@@ -408,9 +443,7 @@ export function OnlineLobby({
                       </button>
                     </>
                   )}
-                  <button disabled={busy} onClick={() => setMode("register")}>
-                    Use a signup code
-                  </button>
+                  <Link href={registerLink}>Create an account</Link>
                   <button disabled={busy} onClick={() => setMode("reset")}>
                     Use a reset code
                   </button>

@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  serverExternalPackages: ["better-sqlite3"],
   distDir: process.env.BUILD_OUTPUT_DIR || ".next",
   async headers() {
     return [

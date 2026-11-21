@@ -1,11 +1,17 @@
 // @vitest-environment node
 import { beforeAll, afterAll, describe, expect, it } from "vitest";
-import { PGlite } from "@electric-sql/pglite";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { randomBytes, randomUUID } from "node:crypto";
 import { acknowledgeMatch, updateQueue } from "@/lib/multiplayer/matchmaking";
 import { createAccount, googleAccount } from "@/lib/auth/accounts";
-import type { SqlClient } from "@/lib/database/connection";
+import {
+  database,
+  sqlClient,
+  transaction,
+  type SqlClient,
+} from "@/lib/database/connection";
 import {
   createRoom,
   changeRoom,
@@ -21,23 +27,17 @@ import {
 import type { Move } from "@/lib/game/types";
 import victories from "../fixtures/victories.json";
 
-const database = new PGlite();
+const directory = mkdtempSync(join(tmpdir(), "orcas-store-"));
 const host = randomUUID(),
   guest = randomUUID(),
   stranger = randomUUID();
-async function tx<T>(work: (db: SqlClient) => Promise<T>) {
-  return database.transaction(async (client) => {
-    await client.exec("SET LOCAL ROLE orcas_app");
-    return work({
-      async query<T>(sql: string, values?: unknown[]) {
-        const result = await client.query(sql, values);
-        return {
-          rows: result.rows as T[],
-          rowCount: result.affectedRows ?? result.rows.length,
-        };
-      },
-    });
-  });
+async function tx<T>(
+  work: (db: SqlClient) => T extends PromiseLike<unknown> ? never : T,
+) {
+  return transaction(work);
+}
+async function query(sql: string, values?: (string | number | null)[]) {
+  return sqlClient(database()).query(sql, values);
 }
 const request = (room: RoomView, action: RoomAction): RoomRequest => ({
   requestId: randomUUID(),
@@ -51,29 +51,23 @@ async function joined() {
     changeRoom(db, room.code, guest, request(room, { kind: "join" })),
   );
 }
+const previousPath = process.env.SQLITE_PATH;
 beforeAll(async () => {
-  await database.exec("CREATE ROLE unprivileged; CREATE ROLE orcas_app");
-  await database.exec(
-    readFileSync("database/migrations/001_multiplayer.sql", "utf8"),
-  );
-  await database.exec(readFileSync("database/grant-local-app.sql", "utf8"));
-  await database.exec(
-    readFileSync("database/migrations/002_matchmaking.sql", "utf8"),
-  );
-  await database.exec(
-    readFileSync("database/migrations/003_google_accounts.sql", "utf8"),
-  );
+  process.env.SQLITE_PATH = join(directory, "orcas.db");
   for (const [index, actor] of [host, guest, stranger].entries())
-    await database.query(
+    await query(
       "INSERT INTO accounts (id, username, password_hash) VALUES ($1, $2, 'fixture')",
       [actor, `player_${index}`],
     );
-}, 30000);
-afterAll(async () => {
-  await database.close();
+});
+afterAll(() => {
+  database().close();
+  if (previousPath === undefined) delete process.env.SQLITE_PATH;
+  else process.env.SQLITE_PATH = previousPath;
+  rmSync(directory, { recursive: true, force: true });
 });
 
-describe("authoritative PostgreSQL room operations", () => {
+describe("authoritative SQLite room operations", () => {
   it("creates a retry-safe room, reserves opposite seats and rejects a third player", async () => {
     const id = randomUUID();
     const first = await tx((db) => createRoom(db, host, id));
@@ -187,13 +181,12 @@ describe("authoritative PostgreSQL room operations", () => {
         }),
       ),
     ).rejects.toMatchObject({ code: "REQUEST_REUSED" });
-    const rows = await database.query(
-      "SELECT * FROM moves WHERE game_code=$1",
-      [room.code],
-    );
+    const rows = await query("SELECT * FROM moves WHERE game_code=$1", [
+      room.code,
+    ]);
     expect(rows.rows).toHaveLength(1);
     await expect(
-      database.query("UPDATE moves SET ply=3 WHERE game_code=$1", [room.code]),
+      query("UPDATE moves SET ply=3 WHERE game_code=$1", [room.code]),
     ).rejects.toThrow("append-only");
   });
 
@@ -265,17 +258,14 @@ describe("authoritative PostgreSQL room operations", () => {
       expect(room.ending).toBeNull();
       expect(
         (
-          await database.query("SELECT * FROM game_rounds WHERE game_code=$1", [
+          await query("SELECT * FROM game_rounds WHERE game_code=$1", [
             room.code,
           ])
         ).rows,
       ).toHaveLength(1);
       expect(
-        (
-          await database.query("SELECT * FROM moves WHERE game_code=$1", [
-            room.code,
-          ])
-        ).rows,
+        (await query("SELECT * FROM moves WHERE game_code=$1", [room.code]))
+          .rows,
       ).toHaveLength(victories[side].length);
     });
 
@@ -310,24 +300,21 @@ describe("authoritative PostgreSQL room operations", () => {
     expect(room.ending).toEqual({ winner: "sharks", reason: "Resignation" });
   });
 
-  it("denies direct reads and writes from an unprivileged database role", async () => {
-    for (const command of [
-      "SELECT * FROM games",
-      "UPDATE games SET current_ply=999",
-      "SELECT * FROM account_sessions",
-    ])
-      await expect(
-        database.transaction(async (db) => {
-          await db.exec("SET LOCAL ROLE unprivileged");
-          await db.exec(command);
-        }),
-      ).rejects.toThrow("permission denied");
+  it("enables foreign keys and WAL and rejects rows referencing missing accounts", async () => {
+    expect(database().pragma("foreign_keys", { simple: true })).toBe(1);
+    expect(database().pragma("journal_mode", { simple: true })).toBe("wal");
+    await expect(
+      query(
+        "INSERT INTO account_sessions (token_hash, account_id, expires_at) VALUES ($1, $2, $3)",
+        ["invalid-session", randomUUID(), Date.now() / 1000 + 60],
+      ),
+    ).rejects.toThrow("FOREIGN KEY");
   });
 
   it("reports disconnected opponents and restores presence without changing the game", async () => {
     const room = await joined();
-    await database.query(
-      "UPDATE games SET sharks_seen = now() - interval '1 minute' WHERE code=$1",
+    await query(
+      "UPDATE games SET sharks_seen = unixepoch('subsec') - 60 WHERE code=$1",
       [room.code],
     );
     const disconnected = await tx((db) => readRoom(db, room.code, host));
@@ -351,8 +338,8 @@ it("expires inactive queue entries and reuses one durable match for repeated req
   expect(await tx((db) => updateQueue(db, host, "enter"))).toEqual({
     status: "waiting",
   });
-  await database.query(
-    "UPDATE matchmaking_queue SET expires_at = now() - interval '1 second' WHERE account_id = $1",
+  await query(
+    "UPDATE matchmaking_queue SET expires_at = unixepoch('subsec') - 1 WHERE account_id = $1",
     [host],
   );
   expect(await tx((db) => updateQueue(db, guest, "enter"))).toEqual({
@@ -382,8 +369,8 @@ it("expires inactive queue entries and reuses one durable match for repeated req
 it("requires an invitation for the first Google sign-in and never links by username", async () => {
   const subject = "google-test-subject";
   const invitationHash = randomBytes(32).toString("hex");
-  await database.query(
-    "INSERT INTO account_invites VALUES ($1, now() + interval '1 hour', NULL)",
+  await query(
+    "INSERT INTO account_invites VALUES ($1, unixepoch('subsec') + 3600, NULL)",
     [invitationHash],
   );
   await expect(tx((db) => googleAccount(db, subject))).rejects.toMatchObject({
@@ -408,8 +395,8 @@ it("requires an invitation for the first Google sign-in and never links by usern
   ).rejects.toMatchObject({ code: "INVALID_INVITE" });
 
   const passwordInvite = randomBytes(32).toString("hex");
-  await database.query(
-    "INSERT INTO account_invites VALUES ($1, now() + interval '1 hour', NULL)",
+  await query(
+    "INSERT INTO account_invites VALUES ($1, unixepoch('subsec') + 3600, NULL)",
     [passwordInvite],
   );
   await expect(

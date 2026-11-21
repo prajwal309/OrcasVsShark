@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import pg from "pg";
+import { openDatabase } from "../../lib/database/sqlite.mjs";
 import { test, expect, type Page } from "@playwright/test";
 import type { RoomRequest, RoomView } from "../../lib/multiplayer/protocol";
 import type { Move } from "../../lib/game/types";
@@ -30,32 +30,57 @@ const action = (room: RoomView, move: Move): RoomRequest => ({
 });
 const password = "a test-only long password";
 
-async function issueCode(resetUsername?: string) {
-  const token = randomBytes(32).toString("hex");
-  const db = new pg.Client({ connectionString: process.env.DATABASE_URL });
-  await db.connect();
+const origin = "http://127.0.0.1:3100";
+
+function withDatabase<T>(work: (db: ReturnType<typeof openDatabase>) => T): T {
+  if (!process.env.SQLITE_PATH) throw new Error("Run npm run test:online.");
+  const db = openDatabase(process.env.SQLITE_PATH);
   try {
-    await db.query("BEGIN");
-    await db.query(
-      `INSERT INTO account_invites VALUES ($1, now() + interval '1 hour',
-       (SELECT id FROM accounts WHERE username = $2))`,
-      [createHash("sha256").update(token).digest("hex"), resetUsername ?? null],
-    );
-    await db.query("COMMIT");
-    return token;
+    return work(db);
   } finally {
-    await db.end();
+    db.close();
   }
 }
 
+function issueResetCode(username: string) {
+  const token = randomBytes(32).toString("hex");
+  withDatabase((db) =>
+    db
+      .prepare(
+        `INSERT INTO account_invites
+     SELECT ?, unixepoch('subsec') + 3600, id FROM accounts WHERE username = ?`,
+      )
+      .run(createHash("sha256").update(token).digest("hex"), username),
+  );
+  return token;
+}
+
+function issueSignupCode() {
+  const token = randomBytes(32).toString("hex");
+  withDatabase((db) =>
+    db
+      .prepare(
+        "INSERT INTO account_invites VALUES (?, unixepoch('subsec') + 3600, NULL)",
+      )
+      .run(createHash("sha256").update(token).digest("hex")),
+  );
+  return token;
+}
+
+test.beforeEach(() => {
+  withDatabase((db) => db.prepare("DELETE FROM account_rate_limits").run());
+});
+
 async function register(page: Page) {
-  const invitation = await issueCode();
   const username = `player_${randomBytes(6).toString("hex")}`;
   await page.goto("/online");
-  await page.getByRole("button", { name: "Use a signup code" }).click();
+  await page.getByRole("link", { name: "Create an account" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Create a player account" }),
+  ).toBeVisible();
   await page.getByLabel("Username").fill(username);
-  await page.getByLabel("Password").fill(password);
-  await page.getByLabel("Signup code").fill(invitation);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByLabel("Confirm password").fill(password);
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page.getByText(`Signed in as ${username}`)).toBeVisible();
   return username;
@@ -168,6 +193,47 @@ test("two browsers synchronize, enforce seats, recover refresh/offline, draw and
   ).toBe(true);
   expect(errors).toEqual([]);
   await other.close();
+});
+
+test("concurrent moves commit once and replay protection survives refresh", async ({
+  page,
+  browser,
+}) => {
+  const context = await browser.newContext();
+  try {
+    const guest = await context.newPage();
+    const code = await openMatch(page, guest);
+    const room = (await api(guest, code)).data as RoomView;
+    const moves = [
+      action(room, { kind: "place", to: "c3" }),
+      action(room, { kind: "place", to: "b2" }),
+    ];
+    const results = await Promise.all(
+      moves.map((move) => api(guest, code, move)),
+    );
+    expect(results.map(({ status }) => status).sort()).toEqual([200, 409]);
+    const accepted = moves[results.findIndex(({ status }) => status === 200)];
+    await guest.reload();
+    const replay = await api(guest, code, accepted);
+    expect(replay.status).toBe(200);
+    expect(replay.data.state.ply).toBe(1);
+    expect(replay.data.moves).toHaveLength(1);
+    const reused = await api(guest, code, {
+      ...accepted,
+      action: { kind: "resign" },
+    });
+    expect(reused.status).toBe(409);
+    expect(reused.data.code).toBe("REQUEST_REUSED");
+    const outsider = await browser.newPage();
+    try {
+      await register(outsider);
+      expect((await api(outsider, code)).status).toBe(403);
+    } finally {
+      await outsider.close();
+    }
+  } finally {
+    await context.close();
+  }
 });
 
 test("online players can use different visual themes for the same canonical game", async ({
@@ -312,7 +378,7 @@ test("a player can reclaim a seat and password reset revokes old sessions", asyn
     const header = returning.getByRole("banner");
     await header.getByRole("link", { name: "Login", exact: true }).click();
     await returning.getByLabel("Username").fill(username);
-    await returning.getByLabel("Password").fill(password);
+    await returning.getByLabel("Password", { exact: true }).fill(password);
     await returning
       .getByRole("button", { name: "Sign in", exact: true })
       .click();
@@ -345,7 +411,7 @@ test("a player can reclaim a seat and password reset revokes old sessions", asyn
       .getByRole("link", { name: "Online lobby and sign-in" })
       .click();
     await returning.getByLabel("Username").fill(username);
-    await returning.getByLabel("Password").fill(password);
+    await returning.getByLabel("Password", { exact: true }).fill(password);
     await returning
       .getByRole("button", { name: "Sign in", exact: true })
       .click();
@@ -353,11 +419,13 @@ test("a player can reclaim a seat and password reset revokes old sessions", asyn
       returning.getByText("Waiting for opponent", { exact: true }),
     ).toBeVisible();
 
-    const reset = await issueCode(username);
+    const reset = issueResetCode(username);
     await returning.goto("/online");
     await returning.getByRole("button", { name: "Sign out" }).click();
     await returning.getByRole("button", { name: "Use a reset code" }).click();
-    await returning.getByLabel("Password").fill("new test-only long password");
+    await returning
+      .getByLabel("Password", { exact: true })
+      .fill("new test-only long password");
     await returning.getByLabel("Reset code").fill(reset);
     await returning.getByRole("button", { name: "Reset password" }).click();
     await expect(returning.getByText(`Signed in as ${username}`)).toBeVisible();
@@ -435,20 +503,27 @@ test("matchmaking cancels, resumes after reload, and seats both players in one l
   }
 });
 
-test("signup reports an existing username and keeps the invitation available", async ({
+test("signup reports mismatched passwords and an existing username", async ({
   page,
   browser,
 }) => {
   const username = await register(page);
-  const invitation = await issueCode();
   const other = await browser.newContext();
   try {
     const joining = await other.newPage();
     await joining.goto("/online");
-    await joining.getByRole("button", { name: "Use a signup code" }).click();
+    await joining.getByRole("link", { name: "Create an account" }).click();
+    await expect(
+      joining.getByRole("heading", { name: "Create a player account" }),
+    ).toBeVisible();
     await joining.getByLabel("Username").fill(username.toUpperCase());
-    await joining.getByLabel("Password").fill(password);
-    await joining.getByLabel("Signup code").fill(invitation);
+    await joining.getByLabel("Password", { exact: true }).fill(password);
+    await joining.getByLabel("Confirm password").fill("a different password");
+    await joining
+      .getByRole("button", { name: "Create account", exact: true })
+      .click();
+    await expect(joining.getByText("Passwords do not match.")).toBeVisible();
+    await joining.getByLabel("Confirm password").fill(password);
     await joining
       .getByRole("button", { name: "Create account", exact: true })
       .click();
@@ -470,6 +545,139 @@ test("signup reports an existing username and keeps the invitation available", a
   }
 });
 
+test("login keeps credentials server-side and rotates, expires, and revokes sessions", async ({
+  page,
+  request,
+}) => {
+  const context = page.context();
+  const username = `player_${randomBytes(6).toString("hex")}`;
+  const secret = "8charPwd";
+  const headers = { Origin: origin };
+  try {
+    const form = { action: "register", username, password: secret };
+    const response = await context.request.post("/api/account", {
+      headers,
+      data: { ...form, password: "short", confirmPassword: "short" },
+    });
+    expect(response.status()).toBe(400);
+    expect((await response.json()).code).toBe("INVALID_PASSWORD");
+    expect(
+      (
+        await context.request.post("/api/account", {
+          headers,
+          data: { ...form, confirmPassword: secret },
+        })
+      ).status(),
+    ).toBe(200);
+
+    const [registered] = await context.cookies();
+    expect(registered).toMatchObject({
+      name: "orcas_session",
+      httpOnly: true,
+      sameSite: "Lax",
+      secure: false,
+    });
+    const registeredHash = createHash("sha256")
+      .update(registered.value)
+      .digest("hex");
+    const session = withDatabase((db) =>
+      db
+        .prepare(
+          "SELECT s.token_hash, a.password_hash FROM account_sessions s JOIN accounts a ON a.id = s.account_id WHERE a.username = ?",
+        )
+        .get(username),
+    );
+    expect(session).toEqual({
+      token_hash: registeredHash,
+      password_hash: expect.stringMatching(/^[a-f0-9]{32}:[a-f0-9]{128}$/),
+    });
+
+    const login = { action: "login", username, password: secret };
+    const wrongPassword = await request.post("/api/account", {
+      headers,
+      data: { ...login, password: "wrong" },
+    });
+    const unknownUser = await request.post("/api/account", {
+      headers,
+      data: { ...login, username: "missing_player" },
+    });
+    expect(wrongPassword.status()).toBe(401);
+    expect(unknownUser.status()).toBe(401);
+    expect(await wrongPassword.json()).toEqual(await unknownUser.json());
+    expect(
+      (
+        await request.post("/api/account", {
+          headers,
+          data: { ...login, username: "player'name" },
+        })
+      ).status(),
+    ).toBe(400);
+
+    const authenticated = await context.request.post("/api/account", {
+      headers,
+      data: login,
+    });
+    expect(await authenticated.json()).toEqual({ username });
+    const [current] = await context.cookies();
+    expect(current.value).not.toBe(registered.value);
+    const accountFromToken = async (token: string) =>
+      (
+        await request.get("/api/account", {
+          headers: { Cookie: `orcas_session=${token}` },
+        })
+      ).json();
+    expect(await accountFromToken(registered.value)).toEqual({
+      username: null,
+    });
+
+    await page.goto("/online");
+    await page.reload();
+    await expect(page.getByText(`Signed in as ${username}`)).toBeVisible();
+    expect(await page.evaluate(() => document.cookie)).not.toContain(
+      "orcas_session",
+    );
+
+    const hash = createHash("sha256").update(current.value).digest("hex");
+    withDatabase((db) =>
+      db
+        .prepare(
+          "UPDATE account_sessions SET expires_at = 0 WHERE token_hash = ?",
+        )
+        .run(hash),
+    );
+    expect(await accountFromToken(current.value)).toEqual({ username: null });
+    await page.reload();
+    await expect(
+      page.getByRole("link", { name: "Login", exact: true }),
+    ).toBeVisible();
+
+    await context.request.post("/api/account", { headers, data: login });
+    const [beforeLogout] = await context.cookies();
+    expect(
+      (
+        await context.request.post("/api/account", {
+          data: { action: "logout" },
+        })
+      ).status(),
+    ).toBe(403);
+    expect(await accountFromToken(beforeLogout.value)).toEqual({ username });
+    expect(
+      (
+        await context.request.post("/api/account", {
+          headers,
+          data: { action: "logout" },
+        })
+      ).status(),
+    ).toBe(200);
+    expect(await accountFromToken(beforeLogout.value)).toEqual({
+      username: null,
+    });
+    expect(await context.cookies()).toHaveLength(0);
+  } finally {
+    await context.close();
+  }
+});
+
 test("Google signup starts a protected authorization and rejects a forged callback", async ({
   page,
 }) => {
@@ -485,7 +693,7 @@ test("Google signup starts a protected authorization and rejects a forged callba
     .getByRole("button", { name: "Create account with Google" })
     .click();
   await page.getByLabel("Username").fill("google_test_player");
-  await page.getByLabel("Signup code").fill(await issueCode());
+  await page.getByLabel("Signup code").fill(issueSignupCode());
   await page.getByRole("button", { name: "Continue with Google" }).click();
   await page.waitForURL("https://accounts.google.com/**");
   const authorize = new URL(page.url());

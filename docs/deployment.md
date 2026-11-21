@@ -15,4 +15,4 @@ Rollback: retain the last verified immutable Vercel deployment and promote it th
 
 ## Online preview
 
-For private casual multiplayer, follow [multiplayer setup](multiplayer.md) with a separate PostgreSQL database for preview. Apply the migrations and application-role grants before deployment. Configure the server-only `DATABASE_URL` and the exact HTTPS `APP_ORIGIN`. Verify two browsers against the preview database. Back up the database before applying future migrations and retain the audit tables during an application rollback.
+For online play, run a single Node.js instance with a persistent local volume. Set the exact HTTPS `APP_ORIGIN` and give preview environments their own SQLite files. Verify with two browsers and back up SQLite before upgrades. See [multiplayer setup](multiplayer.md).

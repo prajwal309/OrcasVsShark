@@ -10,7 +10,7 @@ import {
 } from "@/lib/auth/google";
 import {
   currentToken,
-  hashToken,
+  replaceSession,
   sessionCookie,
   sessionSeconds,
 } from "@/lib/auth/session";
@@ -65,16 +65,9 @@ export async function GET(request: Request) {
     const subject = await googleSubject(config, code, attempt.verifier);
     const token = randomBytes(32).toString("hex");
     const previous = await currentToken();
-    await transaction(async (db) => {
-      const id = await googleAccount(db, subject, attempt.signup);
-      if (previous)
-        await db.query("DELETE FROM account_sessions WHERE token_hash = $1", [
-          hashToken(previous),
-        ]);
-      await db.query(
-        "INSERT INTO account_sessions VALUES ($1, $2, now() + $3 * interval '1 second')",
-        [hashToken(token), id, sessionSeconds],
-      );
+    transaction((db) => {
+      const id = googleAccount(db, subject, attempt.signup);
+      replaceSession(db, id, token, previous);
     });
     jar.set(sessionCookie, token, {
       ...attributes,

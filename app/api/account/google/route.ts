@@ -21,7 +21,7 @@ const input = z.strictObject({
 
 export function POST(request: Request) {
   return respond(async () => {
-    const secure = requireSameOrigin(request);
+    const secure = requireSameOrigin(request, { allowLocalAddress: false });
     const config = googleConfiguration();
     if (!config)
       throw new RoomError(
