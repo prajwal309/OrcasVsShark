@@ -18,8 +18,17 @@ export async function roomApi(path: string, body?: unknown): Promise<RoomView> {
     cache: "no-store",
     signal: AbortSignal.timeout(15000),
   });
+  if (!response.ok) {
+    const data: { code?: string; error?: string } | null = await response
+      .json()
+      .catch(() => null);
+    throw new ApiError(
+      response.status,
+      data?.code ?? "INVALID_OR_UNAVAILABLE",
+      data?.error ?? "The game service is unavailable. Please reconnect.",
+    );
+  }
   const data = await response.json();
-  if (!response.ok) throw new ApiError(response.status, data.code, data.error);
   data.state = deserializeState(
     JSON.stringify({ version: 1, state: data.state }),
   );

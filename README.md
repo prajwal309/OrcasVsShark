@@ -50,22 +50,6 @@ play locally, put a PostgreSQL 16+ connection in `PRISMA_DATABASE_URL` in
 with a unique username, email address, and password. See [multiplayer
 setup](docs/multiplayer.md) and [Vercel deployment](docs/deployment.md).
 
-## Commit and push from Windows
-
-With Git for Windows installed, run this from Git Bash:
-
-```sh
-bash ./commit2GitWindows.sh "Describe your changes"
-```
-
-Or from PowerShell, using the default Git for Windows installation path:
-
-```powershell
-& "C:\Program Files\Git\bin\bash.exe" ./commit2GitWindows.sh "Describe your changes"
-```
-
-The script stages all non-ignored changes, commits them, fetches and rebases onto remote `main` when present, then pushes to GitHub. It stops on errors or conflicts and requires the current branch to be `main`. Configure your Git identity and GitHub authentication before running it. Omitting the message uses `Update Orcas vs Sharks game`.
-
 ## Verify
 
 Set `TEST_POSTGRES_URL` in your shell to a disposable PostgreSQL database for integration and online browser tests. Each suite applies the Prisma migrations in an isolated schema.
@@ -96,6 +80,7 @@ To verify while a development server is running, build with `BUILD_OUTPUT_DIR=.n
 - [Asset licenses](docs/asset-licenses.md)
 - [Production deployment, backups, and rollback](docs/deployment.md)
 - [Online rooms and verification](docs/multiplayer.md)
+- [Codebase review and roadmap](docs/codebase-review.md)
 
 The framework-independent engine lives in `lib/game`. Board paths are explicit, and SVG coordinates are never used to decide legality. The local session replays moves through the canonical engine before accepting a saved snapshot. Storage is a local convenience, not trusted online state.
 

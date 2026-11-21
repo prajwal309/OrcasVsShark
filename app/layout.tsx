@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import "./globals.css";
 import { AccountProvider } from "@/components/navigation/account-navigation";
-import { sessionAccount } from "@/lib/auth/session";
+import { pageSessionAccount } from "@/lib/auth/session";
 import {
   defaultSiteTheme,
   restoreSiteTheme,
@@ -17,7 +17,7 @@ export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   const [account, requestHeaders] = await Promise.all([
-    sessionAccount().catch(() => null),
+    pageSessionAccount().catch(() => null),
     headers(),
   ]);
   const nonce = requestHeaders.get("x-nonce") ?? undefined;

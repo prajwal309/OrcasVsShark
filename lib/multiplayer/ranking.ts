@@ -26,8 +26,19 @@ export function eloChange(
   return raw < 0 && rounded ? -rounded : rounded;
 }
 
+export const ratingWindowRules = {
+  initial: 100,
+  step: 50,
+  stepMs: 10_000,
+  maximum: 400,
+} as const;
+
 export function ratingWindow(waitMs: number) {
-  return Math.min(400, 100 + 50 * Math.floor(Math.max(0, waitMs) / 10_000));
+  const { initial, step, stepMs, maximum } = ratingWindowRules;
+  return Math.min(
+    maximum,
+    initial + step * Math.floor(Math.max(0, waitMs) / stepMs),
+  );
 }
 
 export type Clock = {

@@ -221,6 +221,63 @@ test("concurrent moves commit once and replay protection survives refresh", asyn
   }
 });
 
+test("a delayed poll failure does not overwrite a confirmed move", async ({
+  page,
+  browser,
+}) => {
+  const other = await browser.newContext();
+  try {
+    const guest = await other.newPage();
+    const code = await openMatch(page, guest);
+    const pollStarted = Promise.withResolvers<void>();
+    const releasePoll = Promise.withResolvers<void>();
+    let held = false;
+    await guest.route(`**/api/rooms/${code}`, async (route) => {
+      if (held || route.request().method() !== "GET") {
+        await route.continue();
+        return;
+      }
+      held = true;
+      pollStarted.resolve();
+      await releasePoll.promise;
+      await route.fulfill({
+        status: 401,
+        json: { code: "UNAUTHENTICATED", error: "Sign in to play." },
+      });
+    });
+    try {
+      await pollStarted.promise;
+      await guest
+        .getByRole("button", { name: "c3, empty", exact: true })
+        .click();
+      await expect(
+        guest.getByRole("button", { name: "c3, shark", exact: true }),
+      ).toBeVisible();
+      const delayed = guest.waitForResponse(
+        (response) =>
+          response.url().endsWith(`/api/rooms/${code}`) &&
+          response.status() === 401,
+      );
+      releasePoll.resolve();
+      await delayed;
+      await guest.evaluate(
+        () =>
+          new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+          ),
+      );
+      await expect(
+        guest.getByRole("region", { name: "Online room" }),
+      ).toBeVisible();
+      await expect(guest.getByText("Sign in to play.")).toHaveCount(0);
+    } finally {
+      releasePoll.resolve();
+    }
+  } finally {
+    await other.close();
+  }
+});
+
 test("online players can use different visual themes for the same canonical game", async ({
   page,
   browser,
@@ -341,6 +398,11 @@ test("unauthenticated and malformed HTTP requests fail", async ({
   const malformed = action(room, { kind: "place", to: "c3" });
   Object.assign(malformed.action, { unauthorizedField: "ignored?" });
   expect((await api(guest, code, malformed)).status).toBe(400);
+  const unexpectedMime = await guest.request.post(`/api/rooms/${code}`, {
+    headers: { Origin: origin, "Content-Type": "application/jsonp" },
+    data: JSON.stringify(malformed),
+  });
+  expect(unexpectedMime.status()).toBe(415);
   await other.close();
 });
 

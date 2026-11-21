@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { NODES } from "./graph";
 import { createPositionKey } from "./position-key";
 import { getGameResult } from "./result";
 import { GameError, type GameState } from "./types";
@@ -45,9 +44,6 @@ export function deserializeState(payload: string): GameState {
       parsed.history.length !== parsed.ply + 1 ||
       parsed.turn !== (parsed.ply % 2 === 0 ? "sharks" : "orcas") ||
       parsed.history.at(-1) !== createPositionKey(parsed) ||
-      NODES.some(
-        (n) => parsed.board[n] && !["orca", "shark"].includes(parsed.board[n]!),
-      ) ||
       JSON.stringify(parsed.result) !== JSON.stringify(getGameResult(parsed))
     )
       throw new Error();

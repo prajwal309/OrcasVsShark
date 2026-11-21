@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { sessionAccount } from "@/lib/auth/session";
+import { pageSessionAccount } from "@/lib/auth/session";
 import { readIfAvailable } from "@/lib/database/connection";
 import { emptyProgress } from "@/lib/learn/progress";
 import { loadProgress } from "@/lib/learn/store";
@@ -10,7 +10,7 @@ export default async function LearnLayout({
 }: {
   children: ReactNode;
 }) {
-  const account = await sessionAccount({ allowUnavailable: true });
+  const account = await pageSessionAccount();
   const initial = account
     ? ((await readIfAvailable((db) => loadProgress(db, account.id))) ??
       emptyProgress)

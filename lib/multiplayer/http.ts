@@ -21,7 +21,12 @@ export async function actorFor(
 }
 
 export async function readJson(request: Request): Promise<unknown> {
-  if (!request.headers.get("content-type")?.startsWith("application/json"))
+  const mime = request.headers
+    .get("content-type")
+    ?.split(";", 1)[0]
+    .trim()
+    .toLowerCase();
+  if (mime !== "application/json")
     throw new RoomError(415, "JSON_REQUIRED", "Send JSON.");
   const reader = request.body?.getReader();
   if (!reader)
@@ -53,12 +58,18 @@ export async function respond(work: () => Promise<unknown>): Promise<Response> {
   } catch (error) {
     const known = error instanceof RoomError;
     const unavailable = error instanceof DatabaseUnavailableError;
+    const invalid = error instanceof ZodError;
+    if (!known && !unavailable && !invalid)
+      console.error(
+        "Unexpected game API error",
+        error instanceof Error ? error.name : "unknown",
+      );
     return Response.json(
       {
         error:
           known || unavailable
             ? error.message
-            : error instanceof ZodError
+            : invalid
               ? "Invalid request."
               : "The game service is unavailable. Please reconnect.",
         code: known
@@ -68,7 +79,7 @@ export async function respond(work: () => Promise<unknown>): Promise<Response> {
             : "INVALID_OR_UNAVAILABLE",
       },
       {
-        status: known ? error.status : error instanceof ZodError ? 400 : 503,
+        status: known ? error.status : invalid ? 400 : 503,
         headers: { "Cache-Control": "no-store" },
       },
     );

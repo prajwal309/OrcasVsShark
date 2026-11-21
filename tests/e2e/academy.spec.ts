@@ -7,7 +7,9 @@ test("an anonymous learner finishes a lesson with the keyboard and resumes after
   page,
 }) => {
   await page.goto("/");
-  await page.getByRole("link", { name: "Learn to Play" }).click();
+  const learnToPlay = page.getByRole("link", { name: "Learn to Play" });
+  await expect(learnToPlay).toBeInViewport({ ratio: 1 });
+  await learnToPlay.click();
   await expect(
     page.getByRole("heading", { name: "Learn to Play" }),
   ).toBeVisible();

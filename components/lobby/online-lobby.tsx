@@ -232,7 +232,12 @@ export function OnlineLobby({
           <div>
             <p className="eyebrow">A BAGH CHAL STRATEGY GAME</p>
             <h1>Orcas vs Sharks</h1>
-            <p>Four Orcas hunt. Twenty Sharks close in.</p>
+            <p className="lobby-tagline">
+              Four Orcas hunt. Twenty Sharks close in.
+            </p>
+            <Link className="primary-button lobby-learn-link" href="/learn">
+              Learn to Play
+            </Link>
           </div>
           <SiteThemeSelect />
         </div>
@@ -573,7 +578,6 @@ export function OnlineLobby({
         </section>
         <div className="lobby-links">
           <Link href="/play">Play locally on one device</Link>
-          <Link href="/learn">Learn to Play</Link>
         </div>
       </main>
     </div>

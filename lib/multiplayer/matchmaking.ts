@@ -2,7 +2,12 @@ import { randomInt, randomUUID } from "node:crypto";
 import type { SqlClient } from "@/lib/database/connection";
 import { changeRoom, createRoom, expireRankedRoom } from "./store";
 import { activeRankedMatch, startRankedMatch } from "./ratings-store";
-import { ratingWindow, type MatchMode, type RankedMode } from "./ranking";
+import {
+  ratingWindow,
+  ratingWindowRules,
+  type MatchMode,
+  type RankedMode,
+} from "./ranking";
 
 export type QueueAction = "enter" | "status" | "cancel";
 export type QueueState =
@@ -28,13 +33,10 @@ export async function updateQueue(
   now = Date.now(),
 ): Promise<QueueState> {
   const seconds = now / 1000;
-  await db.query("DELETE FROM matchmaking_queue WHERE expires_at <= $1", [
-    seconds,
-  ]);
   const current = (
     await db.query<QueueEntry>(
-      "SELECT mode, joined_at, room_code FROM matchmaking_queue WHERE account_id = $1",
-      [actor],
+      "SELECT mode, joined_at, room_code FROM matchmaking_queue WHERE account_id = $1 AND expires_at > $2",
+      [actor, seconds],
     )
   ).rows[0];
   if (current?.room_code)
@@ -57,6 +59,9 @@ export async function updateQueue(
   }
   if (!current && action === "status") return { status: "idle" };
 
+  await db.query("DELETE FROM matchmaking_queue WHERE expires_at <= $1", [
+    seconds,
+  ]);
   const mode = action === "enter" ? (requested ?? "casual") : current.mode;
   const joined = current?.mode === mode ? current.joined_at : seconds;
   await db.query(
@@ -78,28 +83,32 @@ export async function updateQueue(
           )
         ).rows[0]
       : (
-          await db.query<{
-            account_id: string;
-            joined_at: number;
-            distance: number;
-          }>(
-            `SELECT q.account_id, q.joined_at, abs(candidate.rating - own.rating) AS distance
+          await db.query<{ account_id: string }>(
+            `SELECT q.account_id
          FROM matchmaking_queue q
            JOIN player_ratings candidate ON candidate.player_id = q.account_id AND candidate.mode = q.mode
            JOIN player_ratings own ON own.player_id = $1 AND own.mode = q.mode
+           CROSS JOIN LATERAL (SELECT abs(candidate.rating - own.rating) AS distance) gap
          WHERE q.account_id <> $1 AND q.mode = $2 AND q.room_code IS NULL
-           AND abs(candidate.rating - own.rating) <= $3
+           AND gap.distance <= $3
+           AND gap.distance <= LEAST($8, $5 + $6 * FLOOR(GREATEST(0, $4 - ROUND(q.joined_at * 1000)) / $7))
            AND NOT EXISTS (
              SELECT 1 FROM ranked_matches m WHERE m.ended_at IS NULL
                AND (m.orcas_id = q.account_id OR m.sharks_id = q.account_id)
            )
-         ORDER BY distance, q.joined_at, q.account_id`,
-            [actor, mode, ratingWindow(now - Math.round(joined * 1000))],
+         ORDER BY gap.distance, q.joined_at, q.account_id LIMIT 1`,
+            [
+              actor,
+              mode,
+              ratingWindow(now - Math.round(joined * 1000)),
+              now,
+              ratingWindowRules.initial,
+              ratingWindowRules.step,
+              ratingWindowRules.stepMs,
+              ratingWindowRules.maximum,
+            ],
           )
-        ).rows.find(
-          ({ joined_at, distance }) =>
-            distance <= ratingWindow(now - Math.round(joined_at * 1000)),
-        );
+        ).rows[0];
   if (!opponent) return { status: "waiting", ...modeField(mode) };
 
   const [orcas, sharks] =

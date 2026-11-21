@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { cache } from "react";
 import { cookies } from "next/headers";
 import {
   read,
@@ -90,3 +91,8 @@ export async function sessionAccount({ allowUnavailable = false } = {}) {
     (await (allowUnavailable ? readIfAvailable(lookup) : read(lookup))) ?? null
   );
 }
+
+// Share one account lookup across server components in the current render.
+export const pageSessionAccount = cache(() =>
+  sessionAccount({ allowUnavailable: true }),
+);

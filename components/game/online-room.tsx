@@ -38,39 +38,47 @@ export function OnlineRoom({ code }: { code: string }) {
   const pending = useRef<RoomRequest | null>(null);
   const submitting = useRef(false);
   const refreshing = useRef(false);
+  const requestSequence = useRef(0);
+  const confirmedSequence = useRef(0);
 
-  const accept = useCallback((next: RoomView, requestedAt: number) => {
-    const current = latest.current;
-    if (
-      current &&
-      (next.revision < current.revision ||
-        (next.revision === current.revision &&
-          next.ranked &&
-          current.ranked &&
-          next.ranked.sampledAt < current.ranked.sampledAt))
-    )
-      return;
-    if (next.ranked) {
-      const receivedAt = performance.now();
-      setClockAnchor({
-        receivedAt,
-        latency: Math.min((receivedAt - requestedAt) / 2, 1000),
-      });
-    }
-    latest.current = next;
-    setRoom(next);
-    setConnected(true);
-    setNeedsJoin(false);
-    setMessage("");
-  }, []);
+  const accept = useCallback(
+    (next: RoomView, requestedAt: number, sequence: number) => {
+      const current = latest.current;
+      if (
+        current &&
+        (next.revision < current.revision ||
+          (next.revision === current.revision &&
+            next.ranked &&
+            current.ranked &&
+            next.ranked.sampledAt < current.ranked.sampledAt))
+      )
+        return;
+      if (next.ranked) {
+        const receivedAt = performance.now();
+        setClockAnchor({
+          receivedAt,
+          latency: Math.min((receivedAt - requestedAt) / 2, 1000),
+        });
+      }
+      confirmedSequence.current = Math.max(confirmedSequence.current, sequence);
+      latest.current = next;
+      setRoom(next);
+      setConnected(true);
+      setNeedsJoin(false);
+      setMessage("");
+    },
+    [],
+  );
 
   const refresh = useCallback(async () => {
     if (refreshing.current) return;
     refreshing.current = true;
+    const sequence = ++requestSequence.current;
     try {
       const started = performance.now();
-      accept(await roomApi(`/${code}`), started);
+      accept(await roomApi(`/${code}`), started, sequence);
     } catch (error) {
+      if (sequence < confirmedSequence.current) return;
       setConnected(false);
       if (error instanceof ApiError && error.status === 401) {
         latest.current = null;
@@ -126,9 +134,10 @@ export function OnlineRoom({ code }: { code: string }) {
       action,
     };
     pending.current = request;
+    const sequence = ++requestSequence.current;
     try {
       const started = performance.now();
-      accept(await roomApi(`/${code}`, request), started);
+      accept(await roomApi(`/${code}`, request), started, sequence);
       pending.current = null;
       setRetry(null);
       setMessage("");
