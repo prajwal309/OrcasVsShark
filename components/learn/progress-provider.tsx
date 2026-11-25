@@ -71,6 +71,7 @@ export function ProgressProvider({
   const outbox = useRef<LearningEvent[]>([]);
   const syncing = useRef(false);
   const outboxKey = `orcas-academy-outbox-v1:${account}`;
+  const guestImportKey = `orcas-academy-guest-imported-v1:${account}`;
 
   const publish = useCallback((next: Progress) => {
     current.current = next;
@@ -78,10 +79,34 @@ export function ProgressProvider({
   }, []);
 
   const retrySync = useCallback(async () => {
-    if (!account || syncing.current || !outbox.current.length) return;
+    if (!account || syncing.current) return;
+    const guest = progressSchema.safeParse(readStorage(guestKey));
+    const hasGuestProgress =
+      guest.success &&
+      [...Object.values(guest.data.lesson), ...Object.values(guest.data.puzzle), ...Object.values(guest.data.quiz)].some(
+        (item) => item.attempts || item.hints || item.completedAt !== null,
+      );
+    const needsGuestImport =
+      hasGuestProgress && localStorage.getItem(guestImportKey) !== "true";
+    if (!needsGuestImport && !outbox.current.length) return;
     syncing.current = true;
     setSyncFailed(false);
     try {
+      if (needsGuestImport && guest.success) {
+        const response = await fetch("/api/learn/import", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Learning-Player": account,
+          },
+          body: JSON.stringify(guest.data),
+        });
+        if (!response.ok) throw new Error("Guest progress import failed.");
+        const server = progressSchema.parse(await response.json());
+        localStorage.removeItem(guestKey);
+        localStorage.setItem(guestImportKey, "true");
+        publish(server);
+      }
       while (outbox.current.length) {
         const response = await fetch("/api/learn", {
           method: "POST",
@@ -107,7 +132,7 @@ export function ProgressProvider({
     } finally {
       syncing.current = false;
     }
-  }, [account, outboxKey, publish]);
+  }, [account, guestImportKey, outboxKey, publish]);
 
   useEffect(() => {
     let active = true;

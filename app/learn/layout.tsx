@@ -11,14 +11,15 @@ export default async function LearnLayout({
   children: ReactNode;
 }) {
   const account = await pageSessionAccount();
-  const initial = account
-    ? ((await readIfAvailable((db) => loadProgress(db, account.id))) ??
+  const player = account && !account.is_guest ? account.id : null;
+  const initial = player
+    ? ((await readIfAvailable((db) => loadProgress(db, player))) ??
       emptyProgress)
     : emptyProgress;
   return (
     <ProgressProvider
-      key={account?.id ?? "guest"}
-      account={account?.id ?? null}
+      key={player ?? "guest"}
+      account={player}
       initial={initial}
     >
       {children}

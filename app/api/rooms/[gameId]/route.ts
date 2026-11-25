@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 type Context = { params: Promise<{ gameId: string }> };
 export async function GET(request: Request, context: Context) {
   return respond(async () => {
-    const actor = await actorFor(request, "read", 120);
+    const actor = await actorFor(request, "read", 120, { allowGuest: true });
     const code = roomCodeSchema.parse((await context.params).gameId);
     return transaction(async (db) => {
       const room = await readRoom(db, code, actor);
@@ -18,7 +18,7 @@ export async function GET(request: Request, context: Context) {
 }
 export async function POST(request: Request, context: Context) {
   return respond(async () => {
-    const actor = await actorFor(request, "action", 90);
+    const actor = await actorFor(request, "action", 90, { allowGuest: true });
     const code = roomCodeSchema.parse((await context.params).gameId);
     const action = requestSchema.parse(await readJson(request));
     return transaction((db) => changeRoom(db, code, actor, action));

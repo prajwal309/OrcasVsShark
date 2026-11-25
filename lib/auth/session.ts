@@ -83,7 +83,11 @@ export async function sessionAccount({ allowUnavailable = false } = {}) {
         token_hash: hashToken(token),
         expires_at: { gt: Date.now() / 1000 },
       },
-      select: { accounts: { select: { id: true, username: true } } },
+      select: {
+        accounts: {
+          select: { id: true, username: true, is_guest: true },
+        },
+      },
     });
     return session?.accounts ?? null;
   };

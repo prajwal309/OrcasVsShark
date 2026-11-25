@@ -7,20 +7,34 @@ import {
 import { rateLimit } from "./store";
 import { RoomError } from "./protocol";
 
+export function requireRegisteredAccount(isGuest: boolean) {
+  if (isGuest)
+    throw new RoomError(
+      403,
+      "REGISTERED_ACCOUNT_REQUIRED",
+      "Create an account to use this feature.",
+    );
+}
+
 export async function actorFor(
   request: Request,
   bucket: string,
   limit: number,
+  { allowGuest = false }: { allowGuest?: boolean } = {},
 ): Promise<string> {
   if (request.method !== "GET") requireSameOrigin(request);
   const account = await sessionAccount();
   if (!account) throw new RoomError(401, "UNAUTHENTICATED", "Sign in to play.");
+  if (!allowGuest) requireRegisteredAccount(account.is_guest);
   // Failed game actions still count against the limit.
   await transaction((db) => rateLimit(db, account.id, bucket, limit));
   return account.id;
 }
 
-export async function readJson(request: Request): Promise<unknown> {
+export async function readJson(
+  request: Request,
+  maximumBytes = 4096,
+): Promise<unknown> {
   const mime = request.headers
     .get("content-type")
     ?.split(";", 1)[0]
@@ -37,7 +51,7 @@ export async function readJson(request: Request): Promise<unknown> {
     const { done, value } = await reader.read();
     if (done) break;
     length += value.length;
-    if (length > 4096) {
+    if (length > maximumBytes) {
       await reader.cancel();
       throw new RoomError(413, "BODY_TOO_LARGE", "The request is too large.");
     }

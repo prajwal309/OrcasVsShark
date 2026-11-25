@@ -33,20 +33,20 @@ export type EventDetails = LearningEvent extends infer Event
   : never;
 
 const itemSchema = z.object({
-  attempts: z.number().int().nonnegative(),
-  successes: z.number().int().nonnegative(),
-  hints: z.number().int().nonnegative(),
-  seconds: z.number().int().nonnegative(),
+  attempts: z.number().int().min(0).max(2_147_483_647),
+  successes: z.number().int().min(0).max(2_147_483_647),
+  hints: z.number().int().min(0).max(2_147_483_647),
+  seconds: z.number().int().min(0).max(2_147_483_647),
   completedAt: z.number().nullable(),
   opening: z.string().nullable(),
-  hintIndex: z.number().int().nonnegative(),
+  hintIndex: z.number().int().min(0).max(2_147_483_647),
 });
 const cursorSchema = activity.extend({ at: z.number() });
 export const progressSchema = z.object({
   lesson: z.record(z.string(), itemSchema),
   puzzle: z.record(z.string(), itemSchema),
   quiz: z.record(z.string(), itemSchema),
-  streak: z.number().int().nonnegative(),
+  streak: z.number().int().min(0).max(2_147_483_647),
   current: cursorSchema.nullable(),
 });
 export type Progress = z.infer<typeof progressSchema>;

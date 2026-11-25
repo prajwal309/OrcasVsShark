@@ -75,6 +75,55 @@ export async function createAccount(
   return id;
 }
 
+export async function registerGuestAccount(
+  db: SqlClient,
+  guestId: string,
+  username: string,
+  email: string,
+  invitationHash: string | undefined,
+  passwordHash: string,
+) {
+  if (invitationHash) {
+    const invitation = await db.query(
+      `DELETE FROM account_invites WHERE token_hash = $1
+       AND reset_account IS NULL AND expires_at > EXTRACT(EPOCH FROM clock_timestamp())`,
+      [invitationHash],
+    );
+    if (!invitation.rowCount) throw invalidInvitation();
+  }
+  const { rows } = await db.query<{ username_taken: boolean; email_taken: boolean }>(
+    `SELECT
+       EXISTS (SELECT 1 FROM accounts WHERE username = $2 AND id <> $1) AS username_taken,
+       EXISTS (SELECT 1 FROM accounts WHERE email = $3 AND id <> $1) AS email_taken`,
+    [guestId, username, email],
+  );
+  if (rows[0].username_taken)
+    throw new RoomError(
+      409,
+      "USERNAME_TAKEN",
+      "An account already uses that username. Sign in or choose a different username.",
+    );
+  if (rows[0].email_taken)
+    throw new RoomError(
+      409,
+      "EMAIL_TAKEN",
+      "Could not create an account with that email address.",
+    );
+  const updated = await db.query(
+    `UPDATE accounts SET username = $2, email = $3, password_hash = $4,
+       google_subject = NULL, is_guest = FALSE
+     WHERE id = $1 AND is_guest = TRUE`,
+    [guestId, username, email, passwordHash],
+  );
+  if (!updated.rowCount)
+    throw new RoomError(
+      409,
+      "GUEST_SESSION_EXPIRED",
+      "This guest session can no longer be upgraded. Please sign in.",
+    );
+  return guestId;
+}
+
 export async function googleAccount(
   db: SqlClient,
   subject: string,

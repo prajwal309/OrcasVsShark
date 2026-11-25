@@ -1816,3 +1816,71 @@ dialog > p,
     gap: 8px 12px;
   }
 }
+
+.opening-explorer {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  gap: 22px;
+}
+
+.opening-board,
+.opening-details {
+  min-width: 0;
+  padding: 22px;
+}
+
+.opening-details {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+}
+
+.opening-details h2,
+.opening-details h3,
+.daily-stats h2,
+.daily-archive h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 500;
+}
+
+.opening-details label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+}
+
+.opening-details select {
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid var(--control-line);
+  border-radius: 8px;
+  background: var(--field);
+  color: var(--text);
+  font: inherit;
+}
+
+.opening-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.opening-table-scroll table {
+  min-width: 600px;
+}
+
+.daily-stats,
+.daily-archive {
+  margin-bottom: 20px;
+  padding: 20px;
+}
+
+.daily-archive .lobby-links {
+  margin-top: 12px;
+}
+
+@media (max-width: 850px) {
+  .opening-explorer {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

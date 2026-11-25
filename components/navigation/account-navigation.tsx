@@ -5,20 +5,27 @@ import { createContext, useContext, useState, type ReactNode } from "react";
 
 const AccountContext = createContext<{
   username: string | null;
+  isGuest: boolean;
   setUsername: (username: string | null) => void;
+  setIsGuest: (isGuest: boolean) => void;
 } | null>(null);
 
 export function AccountProvider({
   children,
   initialUsername,
+  initialIsGuest = false,
 }: {
   children: ReactNode;
   initialUsername: string | null;
+  initialIsGuest?: boolean;
 }) {
   const [username, setUsername] = useState(initialUsername);
+  const [isGuest, setIsGuest] = useState(initialIsGuest);
 
   return (
-    <AccountContext.Provider value={{ username, setUsername }}>
+    <AccountContext.Provider
+      value={{ username, isGuest, setUsername, setIsGuest }}
+    >
       {children}
     </AccountContext.Provider>
   );

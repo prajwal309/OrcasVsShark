@@ -32,7 +32,10 @@ export default async function RootLayout({
       {/* Browser extensions (such as Grammarly) add body attributes before hydration.
           Keep suppression on this element only; descendants still get checked. */}
       <body suppressHydrationWarning>
-        <AccountProvider initialUsername={account?.username ?? null}>
+        <AccountProvider
+          initialUsername={account?.username ?? null}
+          initialIsGuest={account?.is_guest ?? false}
+        >
           {children}
         </AccountProvider>
       </body>

@@ -59,7 +59,12 @@ export function OnlineLobby({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(() => googleErrorMessage(googleError));
   const requestId = useRef<string | null>(null);
-  const { username: account, setUsername: setAccount } = useAccount();
+  const {
+    username: account,
+    setUsername: setAccount,
+    isGuest,
+    setIsGuest,
+  } = useAccount();
   const [mode, setMode] = useState<
     "login" | "register" | "reset" | "google-register"
   >(register ? "register" : "login");
@@ -166,6 +171,32 @@ export function OnlineLobby({
     }
   }
 
+  async function startGuestSession() {
+    if (busy) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/account/guest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      setAccount(data.username);
+      setIsGuest(true);
+      setQueueMessage("");
+      setMessage("Guest session ready. Your identity is saved on this device.");
+      router.refresh();
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : "Could not start guest play.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function authenticate(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
     if (busy) return;
@@ -183,6 +214,7 @@ export function OnlineLobby({
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
       setAccount(data.username);
+      setIsGuest(data.isGuest ?? false);
       if (!data.username) {
         setSearching(null);
         setQueueMessage("");
@@ -238,6 +270,10 @@ export function OnlineLobby({
             <Link className="primary-button lobby-learn-link" href="/learn">
               Learn to Play
             </Link>
+            <nav className="lobby-links" aria-label="Explore features">
+              <Link href="/daily-puzzle">Daily Puzzle</Link>
+              <Link href="/opening-explorer">Opening Explorer</Link>
+            </nav>
           </div>
           <SiteThemeSelect />
         </div>
@@ -279,9 +315,14 @@ export function OnlineLobby({
                 </button>
               </div>
             ) : (
-              <a className="primary-button" href="#online-account">
-                Sign in to play online
-              </a>
+              <div className="play-mode-actions">
+                <a className="primary-button" href="#online-account">
+                  Sign in to play online
+                </a>
+                <button disabled={busy} onClick={() => void startGuestSession()}>
+                  Play as guest
+                </button>
+              </div>
             )}
           </section>
           <section
@@ -320,7 +361,7 @@ export function OnlineLobby({
                     </span>
                   </>
                 );
-                return account ? (
+                return account && !isGuest ? (
                   <button
                     key={mode}
                     type="button"
@@ -369,10 +410,26 @@ export function OnlineLobby({
             <p>Sign-in and registration are currently unavailable.</p>
           ) : account ? (
             <>
-              <p>Signed in as {account}</p>
-              <Link className="ranked-text-link" href={`/players/${account}`}>
-                View player profile
-              </Link>
+              <p>
+                {isGuest ? "Playing as guest" : "Signed in as"} {account}
+              </p>
+              {isGuest ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAccount(null);
+                    setIsGuest(false);
+                    setMode("register");
+                    setMessage("");
+                  }}
+                >
+                  Create account and keep progress
+                </button>
+              ) : (
+                <Link className="ranked-text-link" href={`/players/${account}`}>
+                  View player profile
+                </Link>
+              )}
               <button
                 disabled={busy || !!searching || queueBusy}
                 onClick={() => void authenticate()}

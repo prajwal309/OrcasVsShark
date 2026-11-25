@@ -16,6 +16,7 @@ import {
   emailSchema,
   invalidInvitation,
   invitationSchema as invitation,
+  registerGuestAccount,
   usernameSchema as username,
   signupCodeRequired,
 } from "@/lib/auth/accounts";
@@ -86,9 +87,13 @@ async function limit(bucket: string, maximum: number) {
 }
 
 export function GET() {
-  return respond(async () => ({
-    username: (await sessionAccount())?.username ?? null,
-  }));
+  return respond(async () => {
+    const account = await sessionAccount();
+    return {
+      username: account?.username ?? null,
+      isGuest: account?.is_guest ?? false,
+    };
+  });
 }
 
 export async function POST(request: Request) {
@@ -137,6 +142,20 @@ export async function POST(request: Request) {
       }
     }
     const previous = await currentToken();
+    const previousAccount =
+      body.action === "register" && previous
+        ? await read((db) =>
+            db.account_sessions.findUnique({
+              where: {
+                token_hash: hashToken(previous),
+                expires_at: { gt: Date.now() / 1000 },
+              },
+              select: {
+                accounts: { select: { id: true, is_guest: true } },
+              },
+            }),
+          )
+        : null;
     const jar = await cookies();
     const attributes = {
       httpOnly: true,
@@ -183,15 +202,23 @@ export async function POST(request: Request) {
       let id = login?.id;
       let name = "username" in body ? body.username : "";
       if (body.action === "register") {
-        id = await createAccount(
-          db,
-          name,
-          body.email,
-          body.invitation && hashToken(body.invitation),
-          {
-            passwordHash: digest,
-          },
-        );
+        id =
+          previousAccount?.accounts.is_guest
+            ? await registerGuestAccount(
+                db,
+                previousAccount.accounts.id,
+                name,
+                body.email,
+                body.invitation && hashToken(body.invitation),
+                digest,
+              )
+            : await createAccount(
+                db,
+                name,
+                body.email,
+                body.invitation && hashToken(body.invitation),
+                { passwordHash: digest },
+              );
       } else if (body.action === "reset") {
         const invite = await db.query<{ reset_account: string }>(
           `DELETE FROM account_invites WHERE token_hash = $1 AND expires_at > EXTRACT(EPOCH FROM clock_timestamp())
@@ -215,6 +242,6 @@ export async function POST(request: Request) {
       return name;
     });
     jar.set(sessionCookie, token, { ...attributes, maxAge: sessionSeconds });
-    return { username: name };
+    return { username: name, isGuest: false };
   });
 }

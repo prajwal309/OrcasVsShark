@@ -37,11 +37,19 @@ export function ExercisePlayer({
   kind,
   next,
   theme,
+  onPuzzleAttempt,
 }: {
   exercise: Exercise;
   kind: ActivityKind;
   next?: Exercise;
   theme: BoardTheme;
+  onPuzzleAttempt?: (event: {
+    action: "attempt" | "hint";
+    answer?: string | number;
+    hintsUsed: number;
+    seconds: number;
+    opening?: string | null;
+  }) => void;
 }) {
   const { progress, ready, record } = useProgress();
   const { id, goal } = exercise;
@@ -105,6 +113,14 @@ export function ExercisePlayer({
       { kind, activityId: id },
       { action: "attempt", answer, opening: item.opening, seconds },
     );
+    if (kind === "puzzle")
+      onPuzzleAttempt?.({
+        action: "attempt",
+        answer: success ? answer : undefined,
+        hintsUsed: item.hintIndex,
+        seconds,
+        opening: item.opening,
+      });
     if (success) {
       setCompletion({
         state: move ? applyMove(state, move) : state,
@@ -254,9 +270,15 @@ export function ExercisePlayer({
           {!completion && item.hintIndex < exercise.hints.length && (
             <button
               disabled={!ready}
-              onClick={() =>
-                record({ kind, activityId: id }, { action: "hint" })
-              }
+              onClick={() => {
+                record({ kind, activityId: id }, { action: "hint" });
+                if (kind === "puzzle")
+                  onPuzzleAttempt?.({
+                    action: "hint",
+                    hintsUsed: item.hintIndex + 1,
+                    seconds: elapsedSeconds(started),
+                  });
+              }}
             >
               Show hint
             </button>
