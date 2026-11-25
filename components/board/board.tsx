@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState, type CSSProperties } from "react";
+import { useId, useRef, useState, type CSSProperties } from "react";
 import { COORDINATES, EDGES, NODES } from "@/lib/game/graph";
 import type { GameState, Move, NodeId } from "@/lib/game/types";
 import { ThemedPiece as Piece } from "./themed-piece";
@@ -18,6 +18,8 @@ export function Board({
   motionEnabled = true,
   finished = false,
   focusNodes = [],
+  guideMove,
+  interactive = true,
 }: {
   state: GameState;
   selected: NodeId | null;
@@ -29,8 +31,11 @@ export function Board({
   motionEnabled?: boolean;
   finished?: boolean;
   focusNodes?: readonly NodeId[];
+  guideMove?: Move;
+  interactive?: boolean;
 }) {
   const refs = useRef<Partial<Record<NodeId, SVGGElement | null>>>({});
+  const guideArrowId = useId().replace(/:/g, "");
   const [frame, setFrame] = useState<{
     position: GameState;
     flipped: boolean;
@@ -88,8 +93,12 @@ export function Board({
     <svg
       className={`game-board${finished || state.result ? " is-finished" : ""}`}
       viewBox="0 0 520 520"
-      aria-label="Bagh Chal game board. Use arrow keys to navigate, Enter or Space to play."
-      role="group"
+      aria-label={
+        interactive
+          ? "Baghchal game board. Use arrow keys to navigate, Enter or Space to play."
+          : "Orcas vs Sharks board preview."
+      }
+      role={interactive ? "group" : "img"}
     >
       <defs>
         <radialGradient id="orca-disc" cx="35%" cy="20%">
@@ -104,6 +113,17 @@ export function Board({
           <stop stopColor="#19515a" stopOpacity=".3" />
           <stop offset="1" stopColor="#092a35" stopOpacity="0" />
         </radialGradient>
+        <marker
+          id={guideArrowId}
+          markerWidth="8"
+          markerHeight="8"
+          refX="6"
+          refY="3"
+          orient="auto"
+          markerUnits="strokeWidth"
+        >
+          <path d="M0 0 6 3 0 6z" fill="var(--board-accent)" />
+        </marker>
       </defs>
       {theme === "tigers-goats" ? <ForestBackground /> : <CapeCodBackground />}
       <rect
@@ -132,6 +152,21 @@ export function Board({
           className="board-line"
         />
       ))}
+      {guideMove && guideMove.kind !== "place" && (
+        <g
+          className="tutorial-guide-arrow"
+          aria-hidden="true"
+          pointerEvents="none"
+        >
+          <line
+            x1={point(guideMove.from).x}
+            y1={point(guideMove.from).y}
+            x2={point(guideMove.to).x}
+            y2={point(guideMove.to).y}
+            markerEnd={`url(#${guideArrowId})`}
+          />
+        </g>
+      )}
       {captures.map(
         (m) =>
           m.kind === "capture" && (
@@ -241,35 +276,43 @@ export function Board({
             ref={(el) => {
               refs.current[node] = el;
             }}
-            role="button"
-            tabIndex={0}
-            aria-label={`${node}, ${piece ? themeLabels(theme).pieces[piece] : "empty"}${legal ? ", legal destination" : ""}${marked ? ", marked for the exercise" : ""}`}
-            aria-pressed={active}
+            role={interactive ? "button" : undefined}
+            tabIndex={interactive ? 0 : -1}
+            aria-label={
+              interactive
+                ? `${node}, ${piece ? themeLabels(theme).pieces[piece] : "empty"}${legal ? ", legal destination" : ""}${marked ? ", marked for the exercise" : ""}`
+                : undefined
+            }
+            aria-pressed={interactive ? active : undefined}
             className={`board-node ${active ? "selected" : ""}`}
             transform={`translate(${p.x} ${p.y})`}
-            onClick={() => onNode(node)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                onNode(node);
-              }
-              const direction: Record<string, [number, number]> = {
-                ArrowUp: [0, -1],
-                ArrowDown: [0, 1],
-                ArrowLeft: [-1, 0],
-                ArrowRight: [1, 0],
-              };
-              if (direction[e.key]) {
-                e.preventDefault();
-                const [dx, dy] = direction[e.key];
-                const target = NODES.find(
-                  (n) =>
-                    point(n).x === p.x + dx * 100 &&
-                    point(n).y === p.y + dy * 100,
-                );
-                if (target) refs.current[target]?.focus();
-              }
-            }}
+            onClick={interactive ? () => onNode(node) : undefined}
+            onKeyDown={
+              interactive
+                ? (e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onNode(node);
+                    }
+                    const direction: Record<string, [number, number]> = {
+                      ArrowUp: [0, -1],
+                      ArrowDown: [0, 1],
+                      ArrowLeft: [-1, 0],
+                      ArrowRight: [1, 0],
+                    };
+                    if (direction[e.key]) {
+                      e.preventDefault();
+                      const [dx, dy] = direction[e.key];
+                      const target = NODES.find(
+                        (n) =>
+                          point(n).x === p.x + dx * 100 &&
+                          point(n).y === p.y + dy * 100,
+                      );
+                      if (target) refs.current[target]?.focus();
+                    }
+                  }
+                : undefined
+            }
           >
             <circle r="38" fill="transparent" />
             <circle r="30" className="focus-ring" />

@@ -432,7 +432,7 @@ test("a player can reclaim a seat and password reset revokes old sessions", asyn
     await expect(
       header.getByRole("link", { name: username, exact: true }),
     ).toBeVisible();
-    await returning.getByRole("link", { name: "Orcas vs Sharks home" }).click();
+    await returning.getByRole("link", { name: "GridLox Games home" }).click();
     await expect(
       header.getByRole("link", { name: username, exact: true }),
     ).toBeVisible();
@@ -685,7 +685,7 @@ test("login keeps credentials server-side and rotates, expires, and revokes sess
       headers,
       data: login,
     });
-    expect(await authenticated.json()).toEqual({ username });
+    expect(await authenticated.json()).toEqual({ username, isGuest: false });
     const [current] = await context.cookies();
     expect(current.value).not.toBe(registered.value);
     const accountFromToken = async (token: string) =>
@@ -696,6 +696,7 @@ test("login keeps credentials server-side and rotates, expires, and revokes sess
       ).json();
     expect(await accountFromToken(registered.value)).toEqual({
       username: null,
+      isGuest: false,
     });
 
     await page.goto("/online");
@@ -710,7 +711,10 @@ test("login keeps credentials server-side and rotates, expires, and revokes sess
       "UPDATE account_sessions SET expires_at = 0 WHERE token_hash = $1",
       [hash],
     );
-    expect(await accountFromToken(current.value)).toEqual({ username: null });
+    expect(await accountFromToken(current.value)).toEqual({
+      username: null,
+      isGuest: false,
+    });
     await page.reload();
     await expect(
       page.getByRole("link", { name: "Login", exact: true }),
@@ -725,7 +729,10 @@ test("login keeps credentials server-side and rotates, expires, and revokes sess
         })
       ).status(),
     ).toBe(403);
-    expect(await accountFromToken(beforeLogout.value)).toEqual({ username });
+    expect(await accountFromToken(beforeLogout.value)).toEqual({
+      username,
+      isGuest: false,
+    });
     expect(
       (
         await context.request.post("/api/account", {
@@ -736,6 +743,7 @@ test("login keeps credentials server-side and rotates, expires, and revokes sess
     ).toBe(200);
     expect(await accountFromToken(beforeLogout.value)).toEqual({
       username: null,
+      isGuest: false,
     });
     expect(await context.cookies()).toHaveLength(0);
   } finally {

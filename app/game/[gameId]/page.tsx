@@ -1,6 +1,9 @@
 import { notFound } from "next/navigation";
 import { OnlineRoom } from "@/components/game/online-room";
 import { roomCodeSchema } from "@/lib/multiplayer/protocol";
+
+export const metadata = { title: "Orcas vs Sharks Online Room" };
+
 export default async function RoomPage({
   params,
 }: {

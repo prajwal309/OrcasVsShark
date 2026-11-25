@@ -396,6 +396,21 @@
   .academy-lesson-board {
     max-width: 520px;
   }
+
+  .daily-puzzle-exercise .academy-lesson-board {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .daily-puzzle-exercise .daily-puzzle-sidebar {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .daily-puzzle-exercise .daily-puzzle-sidebar .academy-instructions {
+    grid-column: 1;
+    grid-row: auto;
+  }
 }
 
 @media (max-width: 540px) {
@@ -417,11 +432,296 @@
   .academy-success {
     animation: none;
   }
+
+  .daily-celebration,
+  .daily-confetti,
+  .daily-completion-panel,
+  .daily-completion-actions {
+    animation: none;
+  }
 }
 
 .academy-board-counts {
   margin: 0 0 6px;
   color: var(--muted);
+}
+
+.daily-puzzle-content {
+  display: grid;
+  gap: 20px;
+  padding-bottom: 24px;
+}
+
+.daily-puzzle-content .daily-stats {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 20px;
+}
+
+.daily-stats p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.daily-puzzle-exercise .academy-instructions {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 20px;
+}
+
+.daily-puzzle-exercise .academy-instructions > p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.daily-puzzle-exercise .academy-instructions .academy-meta {
+  font-size: 14px;
+}
+
+.daily-puzzle-exercise .academy-actions {
+  margin-top: 0;
+}
+
+.academy-exercise-sidebar {
+  display: contents;
+}
+
+.daily-puzzle-sidebar {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 12px;
+}
+
+.daily-puzzle-sidebar .academy-instructions {
+  grid-column: 1;
+  grid-row: auto;
+}
+
+.daily-completion-panel {
+  padding: 16px 20px;
+  border-color: var(--gold);
+  animation: daily-completion-fade 240ms ease-out both;
+}
+
+.daily-completion-panel strong {
+  color: var(--gold);
+  font-size: 15px;
+}
+
+.daily-completion-panel p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.daily-completion-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+  animation: daily-completion-fade 240ms ease-out 60ms both;
+}
+
+.daily-completion-actions > :is(button, a) {
+  width: 100%;
+  min-width: 0;
+  justify-content: center;
+  border-radius: 8px;
+  text-align: center;
+  text-decoration: none;
+}
+
+.daily-completion-actions > button {
+  border: 1px solid var(--control-line);
+  background: var(--surface-raised);
+  color: var(--text);
+}
+
+.daily-celebration-slot {
+  min-height: 70px;
+}
+
+.daily-celebration-slot .daily-celebration {
+  width: 100%;
+}
+
+@keyframes daily-completion-fade {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.daily-puzzle-exercise .academy-lesson-board {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.daily-celebration {
+  position: relative;
+  display: flex;
+  min-height: 70px;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  overflow: hidden;
+  padding: 14px 20px;
+  border: 1px solid var(--gold);
+  border-radius: 12px;
+  background: linear-gradient(110deg, #18263d, #263752);
+  color: var(--ivory);
+  box-shadow: 0 0 24px color-mix(in srgb, var(--gold) 22%, transparent);
+  animation: daily-celebrate 420ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
+
+.daily-celebration strong {
+  z-index: 1;
+  font-family: var(--font-display);
+  font-size: clamp(1.2rem, 3vw, 1.55rem);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.daily-trophy {
+  z-index: 1;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  fill: var(--gold);
+  filter: drop-shadow(0 2px 6px rgb(213 165 71 / 36%));
+}
+
+.daily-confetti {
+  position: absolute;
+  width: 6px;
+  height: 9px;
+  border-radius: 2px;
+  background: var(--gold);
+  animation: daily-confetti-burst 850ms ease-out both;
+}
+
+.confetti-0 {
+  left: 12%;
+  top: 52%;
+  --confetti-x: -24px;
+  --confetti-y: -30px;
+}
+.confetti-1 {
+  left: 21%;
+  top: 48%;
+  --confetti-x: 12px;
+  --confetti-y: 26px;
+  background: #dce5f0;
+}
+.confetti-2 {
+  left: 32%;
+  top: 58%;
+  --confetti-x: -15px;
+  --confetti-y: 30px;
+}
+.confetti-3 {
+  left: 42%;
+  top: 38%;
+  --confetti-x: 22px;
+  --confetti-y: -28px;
+  background: #dce5f0;
+}
+.confetti-4 {
+  right: 12%;
+  top: 45%;
+  --confetti-x: 24px;
+  --confetti-y: -30px;
+}
+.confetti-5 {
+  right: 22%;
+  top: 52%;
+  --confetti-x: -12px;
+  --confetti-y: 28px;
+  background: #dce5f0;
+}
+.confetti-6 {
+  right: 32%;
+  top: 38%;
+  --confetti-x: 15px;
+  --confetti-y: -26px;
+}
+.confetti-7 {
+  right: 42%;
+  top: 56%;
+  --confetti-x: -22px;
+  --confetti-y: 28px;
+  background: #dce5f0;
+}
+
+@keyframes daily-celebrate {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes daily-confetti-burst {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) rotate(0) scale(0.5);
+  }
+  18% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--confetti-x), var(--confetti-y)) rotate(150deg)
+      scale(0.8);
+  }
+}
+
+.daily-solution-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0;
+  padding: 16px;
+}
+
+.daily-solution-controls button:not(.primary-button) {
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--control-line);
+  border-radius: 8px;
+  background: var(--surface-raised);
+}
+
+.daily-solution-controls span {
+  flex: 1 1 100%;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.daily-solution-answer {
+  flex: 1 1 100%;
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.daily-solution-answer strong {
+  color: var(--accent);
 }
 
 @media (min-width: 761px) {
@@ -433,5 +733,22 @@
   .academy-exercise .academy-instructions {
     grid-column: 2;
     grid-row: 1;
+  }
+
+  .daily-puzzle-exercise .daily-puzzle-sidebar {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .daily-puzzle-exercise .daily-puzzle-sidebar .academy-instructions {
+    grid-column: 1;
+    grid-row: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .daily-completion-panel,
+  .daily-completion-actions {
+    animation: none;
   }
 }

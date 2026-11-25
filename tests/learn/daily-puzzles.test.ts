@@ -1,13 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { applyDailyAction, newDailyProgress } from "@/lib/daily/status";
 import {
   dailyPuzzleArchive,
   dailyPuzzleDifficulty,
   dailyPuzzleForDate,
+  dailyPuzzleStreak,
 } from "@/lib/daily/puzzles";
-import {
-  acceptedAnswer,
-  prepareExercise,
-} from "@/lib/learn/exercises";
+import { acceptedAnswer, prepareExercise } from "@/lib/learn/exercises";
 
 describe("daily puzzles", () => {
   it("publishes a validated, reachable puzzle from either side at each difficulty", () => {
@@ -47,5 +46,37 @@ describe("daily puzzles", () => {
     expect(() =>
       dailyPuzzleForDate(tomorrow.toISOString().slice(0, 10)),
     ).toThrow();
+  });
+
+  it("counts a consecutive solved-day streak, allowing today to be unsolved", () => {
+    expect(
+      dailyPuzzleStreak(
+        ["2026-11-24", "2026-11-23", "2026-11-21"],
+        "2026-11-25",
+      ),
+    ).toBe(2);
+    expect(dailyPuzzleStreak(["2026-11-25", "2026-11-24"], "2026-11-25")).toBe(
+      2,
+    );
+  });
+});
+
+describe("daily navigation status", () => {
+  it("tracks attempts and first solve quality without treating reveals as solves", () => {
+    const attempt = { action: "attempt", seconds: 1, hintsUsed: 0 } as const;
+    const hint = { ...attempt, action: "hint", hintsUsed: 1 } as const;
+    const reveal = { ...attempt, action: "reveal" } as const;
+    const readHint = applyDailyAction(newDailyProgress, hint, false);
+    expect(readHint.status).toBe("new");
+    expect(applyDailyAction(readHint, attempt, false).status).toBe("attempted");
+    expect(applyDailyAction(readHint, attempt, true).status).toBe("hinted");
+    expect(applyDailyAction(newDailyProgress, attempt, true).status).toBe(
+      "solved",
+    );
+
+    const revealed = applyDailyAction(newDailyProgress, reveal, false);
+    expect(applyDailyAction(revealed, attempt, true).status).toBe("revealed");
+    const solved = applyDailyAction(newDailyProgress, attempt, true);
+    expect(applyDailyAction(solved, hint, false).status).toBe("solved");
   });
 });

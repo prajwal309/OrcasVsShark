@@ -2,14 +2,14 @@
 
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import Link from "next/link";
+import { GameHeader } from "@/components/navigation/game-header";
+import { GridLoxLogo } from "@/components/navigation/gridlox-logo";
 import { CapeCodCompass } from "@/components/board/cape-cod-background";
 import { Board } from "@/components/board/board";
 import { ThemedPieceIcon as PieceIcon } from "@/components/board/themed-piece";
 import {
-  isBoardTheme,
   themeLabels,
   themeResultReason,
-  type BoardTheme,
 } from "@/lib/presentation/board-themes";
 import { createInitialState } from "@/lib/game/initial-state";
 import { applyMove } from "@/lib/game/apply-move";
@@ -17,12 +17,19 @@ import { getLegalMoves, getLegalMovesFrom } from "@/lib/game/legal-moves";
 import { formatMove } from "@/lib/game/notation";
 import { deserializeState, serializeState } from "@/lib/game/serialization";
 import { computerSettingsSchema, type ComputerSettings } from "@/lib/ai/types";
+import { HowToPlayTutorial } from "./how-to-play-tutorial";
 import { useComputer } from "./use-computer";
 import { VictoryBanner } from "./victory-banner";
 import { RankedClocks } from "./ranked-clocks";
 import { timeControls } from "@/lib/multiplayer/ranking";
 import { AccountLink } from "@/components/navigation/account-navigation";
-import { SiteThemeSelect } from "@/components/navigation/site-theme-select";
+import { GameDialog } from "./game-dialog";
+import { GameSettingsPanel } from "./game-settings-panel";
+import {
+  defaultGameSettings,
+  readGameSettings,
+  saveGameSettings,
+} from "@/lib/presentation/game-settings";
 import type { OnlineController } from "./online-room";
 import type { GameState, Move, NodeId, Side } from "@/lib/game/types";
 
@@ -33,7 +40,6 @@ type Session = {
   ending: Ending | null;
   computer: ComputerSettings | null;
 };
-type Settings = { sound: boolean; motion: boolean; theme: BoardTheme };
 const fresh = (computer: ComputerSettings | null = null): Session => ({
   states: [createInitialState()],
   moves: [],
@@ -41,66 +47,6 @@ const fresh = (computer: ComputerSettings | null = null): Session => ({
   computer,
 });
 const SAVE_KEY = "orcas-sharks.local.v1";
-const SETTINGS_KEY = "orcas-sharks.settings.v1";
-
-export function Rules({
-  online = false,
-  computer = false,
-  theme = "ocean",
-}: {
-  online?: boolean;
-  computer?: boolean;
-  theme?: BoardTheme;
-}) {
-  const labels = themeLabels(theme);
-  return (
-    <div className="rules-copy">
-      <p>Four hunters. Twenty defenders. One {labels.landscape}.</p>
-      <h3>{labels.sides.sharks} surround</h3>
-      <p>
-        {labels.sides.sharks} play first. Place one {labels.defender} on any
-        empty intersection each turn. Once all 20 have been introduced, move one{" "}
-        {labels.defender} along a line to an adjacent empty point. Trap all four{" "}
-        {labels.sides.orcas} to win.
-      </p>
-      <h3>{labels.sides.orcas} capture</h3>
-      <p>
-        Move one {labels.hunter} to an adjacent empty point, or jump over one{" "}
-        {labels.defender} onto the empty point immediately beyond it. Follow a
-        straight, connected line. Capture five {labels.sides.sharks} to win.
-      </p>
-      <h3>A few things to remember</h3>
-      <p>
-        Captures are optional. No chained jumps. {labels.sides.orcas} can move
-        and capture during placement. Captured {labels.sides.sharks} still count
-        toward the 20 introduced.
-      </p>
-      <h3>Play your way</h3>
-      <p>
-        {online
-          ? "Each player controls their own side. "
-          : computer
-            ? "Play your chosen side against the computer. "
-            : "Share this device with a friend. "}
-        Tap or click to play. With a keyboard, Tab to the board, use arrow keys
-        to navigate, and Enter or Space to select or move.{" "}
-        {online
-          ? "Online moves cannot be undone. "
-          : computer
-            ? "Undo takes back your last move and the computer’s reply. "
-            : "Undo is available to both players. "}
-        {computer
-          ? "Draw offers are unavailable against the computer. "
-          : "Draws require both players’ agreement. "}
-        There is no automatic repetition draw.
-      </p>
-      <p className="heritage">
-        An original digital adaptation of Bagh Chal, the traditional asymmetric
-        strategy game of Nepal.
-      </p>
-    </div>
-  );
-}
 
 export default function Game({
   online,
@@ -122,11 +68,7 @@ export default function Game({
   const [selected, setSelected] = useState<NodeId | null>(null);
   const [flipped, setFlipped] = useState(false);
   const [ready, setReady] = useState(false);
-  const [settings, setSettings] = useState<Settings>({
-    sound: false,
-    motion: true,
-    theme: "ocean",
-  });
+  const [settings, setSettings] = useState(defaultGameSettings);
   const [modal, setModal] = useState<
     "rules" | "settings" | "restart" | "resign" | "draw" | "computer" | null
   >(openComputerSetup ? "computer" : null);
@@ -143,7 +85,6 @@ export default function Game({
       : "Sharks move first. Place a Shark on an empty point.",
   );
   const [storageMessage, setStorageMessage] = useState("Saved on this device");
-  const dialog = useRef<HTMLDialogElement>(null);
   const audio = useRef<AudioContext | null>(null);
   const state = session.states[session.states.length - 1];
   const labels = themeLabels(settings.theme);
@@ -225,24 +166,13 @@ export default function Game({
       } catch {
         setStorageMessage("Saved game unavailable · started a new game");
       }
-      try {
-        const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? "null");
-        if (
-          saved &&
-          typeof saved.sound === "boolean" &&
-          typeof saved.motion === "boolean" &&
-          isBoardTheme(saved.theme)
-        ) {
-          setSettings(saved);
-          setAnnouncement((message) =>
-            message === "Sharks move first. Place a Shark on an empty point."
-              ? `${themeLabels(saved.theme).sides.sharks} move first. Place a ${themeLabels(saved.theme).defender} on an empty point.`
-              : message,
-          );
-        }
-      } catch {
-        /* Defaults remain available if browser storage is disabled. */
-      }
+      const saved = readGameSettings();
+      setSettings(saved);
+      setAnnouncement((message) =>
+        message === "Sharks move first. Place a Shark on an empty point."
+          ? `${themeLabels(saved.theme).sides.sharks} move first. Place a ${themeLabels(saved.theme).defender} on an empty point.`
+          : message,
+      );
       setReady(true);
     }, 0);
     return () => {
@@ -265,18 +195,13 @@ export default function Game({
               computer: localSession.computer,
             }),
           );
-        localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+        saveGameSettings(settings);
       } catch {
         setStorageMessage("Storage unavailable · keep this tab open");
       }
     }, 0);
     return () => window.clearTimeout(timer);
   }, [localSession, state, settings, ready, isOnline]);
-
-  useEffect(() => {
-    if (modal) dialog.current?.showModal();
-    else dialog.current?.close();
-  }, [modal]);
 
   function sound(capture: boolean) {
     if (!settings.sound) return;
@@ -434,30 +359,11 @@ export default function Game({
     <div
       className={`site-shell theme-${settings.theme} ${settings.motion ? "" : "no-motion"}`}
     >
-      <header className="site-header">
-        <div className="header-identity">
-          <Link className="brand" href="/" aria-label="Orcas vs Sharks home">
-            <span className="brand-mark">◈</span>
-            <span>
-              ORCAS <span className="brand-vs">vs</span> SHARKS
-            </span>
-          </Link>
-          <AccountLink room={online?.room.code} />
-        </div>
-        <nav aria-label="Main navigation">
-          <Link href="/play" className="nav-active">
-            Play
-          </Link>
-          <button onClick={() => setModal("rules")}>How to play</button>
-          <button
-            onClick={() => setModal("settings")}
-            aria-label="Open settings"
-            className="settings-button"
-          >
-            ⚙
-          </button>
-        </nav>
-      </header>
+      <GameHeader
+        account={<AccountLink room={online?.room.code} />}
+        onRules={() => setModal("rules")}
+        onSettings={() => setModal("settings")}
+      />
       <main className="main-content">
         <div className="page-heading">
           <div>
@@ -801,7 +707,7 @@ export default function Game({
                     (online.connected ? "Connected" : "Reconnecting")
                   : ready
                     ? storageMessage
-                    : "Loading local game…"}
+                    : "Loading Orcas vs Sharks…"}
               </div>
             </section>
             <div className="game-actions">
@@ -860,15 +766,15 @@ export default function Game({
           </aside>
         </div>
         <footer>
-          <div>
-            <span className="footer-mark">◈</span> A new tide. An ancient game.
-          </div>
+          <GridLoxLogo variant="footer" />
           <p>
-            Inspired by <Link href="/learn">Bagh Chal</Link>, the traditional
-            strategy game of Nepal.
+            Orcas vs Sharks is inspired by <Link href="/learn">Baghchal</Link>,
+            the traditional strategy game of Nepal.
           </p>
           <span className="local-note">
-            UNRATED · NO CLOCK · {online ? "ONLINE PLAY" : "LOCAL PLAY"}
+            {ranked
+              ? `RANKED · ${timeControls[ranked.mode].name.toUpperCase()}`
+              : `UNRATED · NO CLOCK · ${online ? "ONLINE PLAY" : "LOCAL PLAY"}`}
           </span>
         </footer>
       </main>
@@ -880,36 +786,32 @@ export default function Game({
       >
         {announcement}
       </div>
-      <dialog
-        ref={dialog}
-        onCancel={() => setModal(null)}
-        onClick={(e) => {
-          if (e.target === dialog.current) setModal(null);
-        }}
+      <GameDialog
+        className={modal === "rules" ? "how-to-play-dialog" : undefined}
+        title={
+          modal === "rules"
+            ? "How to Play"
+            : modal === "settings"
+              ? "Your ocean table"
+              : modal === "computer"
+                ? "Choose your opponent"
+                : modal === "restart"
+                  ? "Start a fresh game?"
+                  : modal === "draw"
+                    ? "Call it a draw?"
+                    : modal === "resign"
+                      ? "Resign this game?"
+                      : null
+        }
+        onClose={() => setModal(null)}
       >
-        <div className="dialog-heading">
-          <h2>
-            {modal === "rules"
-              ? "Learn the currents"
-              : modal === "settings"
-                ? "Your ocean table"
-                : modal === "computer"
-                  ? "Choose your opponent"
-                  : modal === "restart"
-                    ? "Start a fresh game?"
-                    : modal === "draw"
-                      ? "Call it a draw?"
-                      : "Resign this game?"}
-          </h2>
-          <button aria-label="Close dialog" onClick={() => setModal(null)}>
-            ×
-          </button>
-        </div>
         {modal === "rules" ? (
-          <Rules
+          <HowToPlayTutorial
+            onStartPlaying={() => setModal(null)}
             online={isOnline}
             computer={!!computer}
             theme={settings.theme}
+            motion={settings.motion}
           />
         ) : modal === "computer" ? (
           <div className="settings-content">
@@ -992,54 +894,17 @@ export default function Game({
             </div>
           </div>
         ) : modal === "settings" ? (
-          <div className="settings-content">
-            <SiteThemeSelect />
-            <label>
-              Board theme
-              <select
-                value={settings.theme}
-                onChange={(e) => {
-                  const theme = e.target.value as BoardTheme;
-                  setSettings({
-                    ...settings,
-                    theme,
-                  });
-                  setAnnouncement(
-                    `Board theme changed. ${themeLabels(theme).sides[state.turn]} to play.`,
-                  );
-                }}
-              >
-                <option value="ocean">Deep ocean</option>
-                <option value="sand">Sand table</option>
-                <option value="tigers-goats">Tigers &amp; Goats</option>
-              </select>
-            </label>
-            <label>
-              Move sounds
-              <input
-                type="checkbox"
-                checked={settings.sound}
-                onChange={(e) =>
-                  setSettings({ ...settings, sound: e.target.checked })
-                }
-              />
-            </label>
-            <label>
-              Animations
-              <input
-                type="checkbox"
-                checked={settings.motion}
-                onChange={(e) =>
-                  setSettings({ ...settings, motion: e.target.checked })
-                }
-              />
-            </label>
-            <p>
-              Your preferences are saved on this device. Reduced-motion system
-              preferences are always respected.
-            </p>
-          </div>
-        ) : (
+          <GameSettingsPanel
+            settings={settings}
+            onChange={(next) => {
+              setSettings(next);
+              if (next.theme !== settings.theme)
+                setAnnouncement(
+                  `Board theme changed. ${themeLabels(next.theme).sides[state.turn]} to play.`,
+                );
+            }}
+          />
+        ) : modal ? (
           <>
             <p>
               {modal === "restart"
@@ -1096,8 +961,8 @@ export default function Game({
               </button>
             </div>
           </>
-        )}
-      </dialog>
+        ) : null}
+      </GameDialog>
     </div>
   );
 }

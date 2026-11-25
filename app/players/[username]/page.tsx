@@ -9,7 +9,7 @@ import {
   timeControls,
 } from "@/lib/multiplayer/ranking";
 
-export const metadata = { title: "Player Profile | Orcas vs Sharks" };
+export const metadata = { title: "Player Profile" };
 
 export default async function Player({
   params,
@@ -23,7 +23,7 @@ export default async function Player({
   if (!player) {
     return (
       <main className="main-content ranked-page">
-        <Link className="ranked-text-link" href="/#ranked-lobby">
+        <Link className="ranked-text-link" href="/">
           ← Ranked lobby
         </Link>
         <h1>Player profile</h1>

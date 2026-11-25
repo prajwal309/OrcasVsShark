@@ -1,6 +1,13 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { cookies } from "next/headers";
-import { hashToken, currentToken, replaceSession, sessionCookie, sessionSeconds, requireSameOrigin } from "@/lib/auth/session";
+import {
+  hashToken,
+  currentToken,
+  replaceSession,
+  sessionCookie,
+  sessionSeconds,
+  requireSameOrigin,
+} from "@/lib/auth/session";
 import { transaction } from "@/lib/database/connection";
 import { readJson, respond } from "@/lib/multiplayer/http";
 import { RoomError } from "@/lib/multiplayer/protocol";
@@ -17,7 +24,7 @@ export async function POST(request: Request) {
     const forwarded = request.headers.get("x-forwarded-for");
     const address =
       request.headers.get("x-real-ip") ??
-      forwarded?.split(",", 1)[0].trim() ??
+      forwarded?.split(",").at(-1)?.trim() ??
       "unknown";
     const bucket = `guest:${hashToken(address).slice(0, 40)}`;
     const previous = await currentToken();

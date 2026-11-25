@@ -3,7 +3,7 @@ import { readIfAvailable } from "@/lib/database/connection";
 import { leaderboard } from "@/lib/multiplayer/ratings-store";
 import { rankedModes, timeControls } from "@/lib/multiplayer/ranking";
 
-export const metadata = { title: "Ranked Leaderboards | Orcas vs Sharks" };
+export const metadata = { title: "Ranked Leaderboards" };
 
 export default async function Leaderboards({
   searchParams,
@@ -17,7 +17,10 @@ export default async function Leaderboards({
   return (
     <div className="site-shell theme-ocean">
       <main className="main-content ranked-page">
-        <Link className="ranked-text-link" href="/#ranked-lobby">
+        <Link
+          className="ranked-text-link"
+          href={leaders ? "/#ranked-lobby" : "/"}
+        >
           ← Ranked lobby
         </Link>
         <h1>Leaderboards</h1>

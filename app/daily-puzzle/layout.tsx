@@ -20,6 +20,7 @@ export default async function DailyPuzzleLayout({
     <ProgressProvider
       key={player ?? "guest"}
       account={player}
+      username={player ? account?.username : undefined}
       initial={initial}
     >
       {children}

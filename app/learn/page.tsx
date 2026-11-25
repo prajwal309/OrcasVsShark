@@ -3,9 +3,9 @@ import { Academy } from "@/components/learn/academy";
 import "./academy.css";
 
 export const metadata: Metadata = {
-  title: "Learn to Play | Orcas vs Sharks",
+  title: "Learn to Play",
   description:
-    "Learn Bagh Chal with interactive lessons, tactical puzzles, and guided practice.",
+    "Learn Baghchal with interactive lessons, tactical puzzles, and guided practice.",
 };
 
 export default async function Learn({

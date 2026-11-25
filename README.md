@@ -1,12 +1,12 @@
-# Orcas vs Sharks
+# GridLox Games
 
-An original, ocean-themed adaptation of Bagh-Chal, the traditional asymmetric strategy game of Nepal. Four Orcas capture; twenty Sharks surround.
+GridLox Games is home to **Orcas vs Sharks**, an original ocean-themed adaptation of Bagh Chal, the traditional asymmetric strategy game of Nepal. Four Orcas capture and twenty Sharks surround.
 
 ## Current scope
 
-The home screen opens the play lobby. For two players sharing a device, choose **Play locally on one device** or open `/play`. Includes an interactive SVG board, both victory conditions, keyboard play, legal destinations and capture paths, undo, move history, restart/rematch, board flip, rules, sound, three themes, motion preferences, draw agreement, resignation, and local refresh recovery.
+The home screen opens the play lobby. Use **Play**, **How to Play**, or the **Settings** gear in the header. Choose **Setup** to pick your opponent. To resume a game on the same device, choose **Play** or **Play locally on one device**. The game includes a keyboard-accessible board, both victory conditions, legal move highlights, undo, move history, restart and rematches, board flip, rules, sound, three themes, animation preferences, draw agreement, resignation, and local refresh recovery.
 
-The site defaults to **Royal Navy & Gold**. Use **Site appearance** in the lobby, Academy, or game settings to switch to **Ivory & Navy**. The browser saves your selection separately from the board artwork preset.
+The site defaults to **Royal Navy & Gold**. Use **Site appearance** in the lobby, Daily Puzzle, or game settings to switch to **Ivory & Navy**. The browser saves your selection separately from the board artwork preset.
 
 Choose **Settings → Board theme → Tigers & Goats** for original Tiger and Goat pieces on a forest table. Names, rules and announcements follow the theme. Deep ocean and Sand table remain available. Theme choices are saved on this device and can be changed during local, computer or online games without restarting.
 
@@ -25,6 +25,21 @@ board lessons, 12 tactical puzzles, six knowledge checks, and guided practice
 with the built-in computer opponent. Guests save learning progress in their
 browser. Signed-in players save it to PostgreSQL and can resume from another device.
 See the [Academy guide](docs/academy.md) for progress and authoring details.
+
+## Daily Puzzle and Guest Play
+
+Visit `/daily-puzzle` for the date-based tactical challenge, hints, retry,
+and solution review. Past puzzles are available by UTC date using
+`/daily-puzzle?date=YYYY-MM-DD`. The puzzles use the existing legal-move
+engine and solver. Registered players get attempt, success-rate, and streak
+statistics; guests can solve puzzles with progress saved on their device.
+
+Choose **Play as guest** in the lobby for a temporary identity that persists
+across refreshes. Guests can join casual rooms and use local or computer play,
+but ranked matches and Elo ratings remain account-only. Converting a guest
+identity to a registered account retains its room history and can import
+locally saved Academy progress. Apply the additive migration with
+`npm run db:deploy` when deploying these features.
 
 ## Run
 

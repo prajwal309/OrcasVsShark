@@ -20,6 +20,7 @@ export default async function LearnLayout({
     <ProgressProvider
       key={player ?? "guest"}
       account={player}
+      username={player ? account?.username : undefined}
       initial={initial}
     >
       {children}

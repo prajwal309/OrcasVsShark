@@ -4,16 +4,31 @@ import {
   useEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type FormEvent,
 } from "react";
 import Link from "next/link";
+import { GameHeader } from "@/components/navigation/game-header";
+import { GridLoxLogo } from "@/components/navigation/gridlox-logo";
+import { SiteFooter } from "@/components/navigation/site-footer";
 import { useRouter } from "next/navigation";
+import { Board } from "@/components/board/board";
+import { createInitialState } from "@/lib/game/initial-state";
 import {
   AccountLink,
   useAccount,
 } from "@/components/navigation/account-navigation";
 import { roomApi } from "@/lib/multiplayer/client";
+import {
+  guestProgressImportKey,
+  guestProgressKey,
+} from "@/lib/learn/guest-progress";
 import { SiteThemeSelect } from "@/components/navigation/site-theme-select";
+import {
+  defaultGameSettings,
+  readGameSettings,
+} from "@/lib/presentation/game-settings";
+import type { BoardTheme } from "@/lib/presentation/board-themes";
 import type { QueueAction, QueueState } from "@/lib/multiplayer/matchmaking";
 import { roomCodeSchema } from "@/lib/multiplayer/protocol";
 import {
@@ -21,6 +36,15 @@ import {
   timeControls,
   type MatchMode,
 } from "@/lib/multiplayer/ranking";
+
+const previewState = createInitialState();
+
+function ignorePreviewInput() {}
+
+function subscribeToGameSettings(onChange: () => void) {
+  window.addEventListener("storage", onChange);
+  return () => window.removeEventListener("storage", onChange);
+}
 
 function googleErrorMessage(error?: string) {
   switch (error) {
@@ -46,6 +70,7 @@ export function OnlineLobby({
   onlineUnavailable,
   register = false,
   requireSignupCode = false,
+  isHome = false,
 }: {
   returnRoom?: string;
   googleEnabled?: boolean;
@@ -53,6 +78,7 @@ export function OnlineLobby({
   onlineUnavailable: boolean;
   register?: boolean;
   requireSignupCode?: boolean;
+  isHome?: boolean;
 }) {
   const router = useRouter();
   const [code, setCode] = useState("");
@@ -68,6 +94,15 @@ export function OnlineLobby({
   const [mode, setMode] = useState<
     "login" | "register" | "reset" | "google-register"
   >(register ? "register" : "login");
+  const savedBoardTheme = useSyncExternalStore(
+    subscribeToGameSettings,
+    () => readGameSettings().theme,
+    () => defaultGameSettings.theme,
+  );
+  const [previewThemeOverride, setPreviewThemeOverride] =
+    useState<BoardTheme | null>(null);
+  const previewTheme = previewThemeOverride ?? savedBoardTheme;
+  const upgradingGuest = isGuest && mode === "register";
   const loginLink = returnRoom ? `/online?room=${returnRoom}` : "/online";
   const registerLink = `/online?account=register${returnRoom ? `&room=${returnRoom}` : ""}#online-account`;
 
@@ -186,7 +221,9 @@ export function OnlineLobby({
       setAccount(data.username);
       setIsGuest(true);
       setQueueMessage("");
-      setMessage("Guest session ready. Your identity is saved on this device.");
+      setMessage(
+        "Your GridLox Games guest session is ready and saved on this device.",
+      );
       router.refresh();
     } catch (error) {
       setMessage(
@@ -213,6 +250,18 @@ export function OnlineLobby({
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
+      if (event && upgradingGuest) {
+        try {
+          const snapshot = localStorage.getItem(guestProgressKey);
+          if (snapshot)
+            localStorage.setItem(
+              guestProgressImportKey(data.username),
+              snapshot,
+            );
+        } catch {
+          /* The account upgrade still succeeds when storage is unavailable. */
+        }
+      }
       setAccount(data.username);
       setIsGuest(data.isGuest ?? false);
       if (!data.username) {
@@ -246,100 +295,222 @@ export function OnlineLobby({
       setBusy(false);
     }
   }
+
   return (
     <div className="site-shell theme-ocean">
-      <header className="site-header">
-        <div className="header-identity">
-          <Link className="brand" href="/" aria-label="Orcas vs Sharks home">
-            <span className="brand-mark">◈</span>
-            <span>
-              ORCAS <span className="brand-vs">vs</span> SHARKS
-            </span>
-          </Link>
-          {!onlineUnavailable && <AccountLink inLobby />}
-        </div>
-      </header>
+      <GameHeader
+        account={
+          isHome ? (
+            <AccountLink />
+          ) : onlineUnavailable ? null : (
+            <AccountLink inLobby />
+          )
+        }
+        onSettingsUpdate={
+          isHome
+            ? (settings) => setPreviewThemeOverride(settings.theme)
+            : undefined
+        }
+      />
       <main className="main-content online-lobby play-lobby">
-        <div className="lobby-intro">
-          <div>
-            <p className="eyebrow">A BAGH CHAL STRATEGY GAME</p>
-            <h1>Orcas vs Sharks</h1>
-            <p className="lobby-tagline">
-              Four Orcas hunt. Twenty Sharks close in.
-            </p>
-            <Link className="primary-button lobby-learn-link" href="/learn">
-              Learn to Play
-            </Link>
-            <nav className="lobby-links" aria-label="Explore features">
-              <Link href="/daily-puzzle">Daily Puzzle</Link>
-              <Link href="/opening-explorer">Opening Explorer</Link>
-            </nav>
+        {isHome ? (
+          <section className="lobby-hero" aria-labelledby="home-title">
+            <div className="lobby-hero-copy">
+              <p className="eyebrow">A BAGHCHAL STRATEGY GAME</p>
+              <h1 id="home-title">Orcas vs Sharks</h1>
+              <p className="lobby-tagline">
+                Master the hunt. Perfect the surround. Outsmart your opponent.
+              </p>
+              <div className="lobby-hero-actions">
+                <Link className="primary-button" href="/play">
+                  Play Now
+                </Link>
+                <Link className="lobby-secondary-button" href="/learn">
+                  Learn to Play
+                </Link>
+              </div>
+            </div>
+            <div className={`lobby-board-preview theme-${previewTheme}`}>
+              <Board
+                state={previewState}
+                selected={null}
+                moves={[]}
+                flipped={false}
+                theme={previewTheme}
+                interactive={false}
+                onNode={ignorePreviewInput}
+              />
+            </div>
+          </section>
+        ) : (
+          <div className="lobby-intro">
+            <div>
+              <p className="eyebrow">A BAGHCHAL STRATEGY GAME</p>
+              <h1>Orcas vs Sharks</h1>
+              <p className="lobby-tagline">
+                Four Orcas hunt. Twenty Sharks close in.
+              </p>
+              <Link className="primary-button lobby-learn-link" href="/learn">
+                Learn to Play
+              </Link>
+            </div>
+            <div className="lobby-intro-brand">
+              <SiteThemeSelect />
+            </div>
           </div>
-          <SiteThemeSelect />
-        </div>
-        <div className="play-modes">
-          <section
-            className="turn-card play-mode"
-            aria-labelledby="online-mode"
-          >
-            <h2 id="online-mode">Play online</h2>
-            <p>
-              {onlineUnavailable
-                ? "Online accounts and matches are unavailable on this deployment."
-                : "Find an opponent for an untimed, casual match or invite a friend."}
-            </p>
-            {onlineUnavailable ? null : account ? (
-              <div className="play-mode-actions">
-                {searching === "casual" ? (
-                  <button
-                    className="primary-button"
-                    disabled={queueBusy}
-                    onClick={() => void queue("cancel")}
-                  >
-                    Cancel search
+        )}
+        {isHome ? (
+          <>
+            <section
+              className="home-mode-cards"
+              aria-label="Choose a game mode"
+            >
+              <article className="turn-card home-mode-card">
+                <svg
+                  className="home-mode-icon"
+                  viewBox="0 0 32 32"
+                  aria-hidden="true"
+                >
+                  <circle cx="11" cy="10" r="4" />
+                  <circle cx="23" cy="12" r="3" />
+                  <path d="M3.5 27c.5-5.3 3.1-8 7.5-8s7 2.7 7.5 8M20 20c4.8-.9 7.5 1.5 8.3 5.5" />
+                </svg>
+                <h2>Play Online</h2>
+                <p>
+                  {onlineUnavailable
+                    ? "Online matches are unavailable on this deployment."
+                    : "Find a casual opponent, invite a friend, or explore ranked play."}
+                </p>
+                {onlineUnavailable ? (
+                  <button className="home-mode-unavailable" disabled>
+                    Currently unavailable
                   </button>
                 ) : (
-                  <button
-                    className="primary-button"
-                    disabled={queueBusy || busy || !!searching}
-                    onClick={() => void queue("enter")}
-                  >
-                    Find opponent
-                  </button>
+                  <Link className="primary-button" href="/online">
+                    Open online lobby
+                  </Link>
                 )}
-                <button
-                  disabled={busy || !!searching || queueBusy}
-                  onClick={() => void create()}
+              </article>
+              <article className="turn-card home-mode-card">
+                <svg
+                  className="home-mode-icon"
+                  viewBox="0 0 32 32"
+                  aria-hidden="true"
                 >
-                  Create Game
-                </button>
+                  <rect x="8" y="8" width="16" height="16" rx="3" />
+                  <path d="M13 3v5m6-5v5M13 24v5m6-5v5M3 13h5m-5 6h5m16-6h5m-5 6h5" />
+                  <path d="M13 14h6m-3-3v6" />
+                </svg>
+                <h2>Play vs Computer</h2>
+                <p>
+                  Choose your side and challenge the computer at your preferred
+                  difficulty.
+                </p>
+                <Link className="primary-button" href="/play?opponent=computer">
+                  Set up a computer game
+                </Link>
+              </article>
+              <article className="turn-card home-mode-card">
+                <svg
+                  className="home-mode-icon"
+                  viewBox="0 0 32 32"
+                  aria-hidden="true"
+                >
+                  <path d="M9 11h14c3 0 5 2 5.8 5.3l1.1 4.5c.6 2.4-2.2 4.1-4 2.3l-3.5-3.3H9.6l-3.5 3.3c-1.8 1.8-4.6.1-4-2.3l1.1-4.5C4 13 6 11 9 11Z" />
+                  <path d="M10 14v6m-3-3h6m8-1h.1m3 3h.1" />
+                </svg>
+                <h2>Local Play</h2>
+                <p>
+                  Play both sides on one device. No account or online service
+                  required.
+                </p>
+                <Link className="primary-button" href="/play">
+                  Play locally
+                </Link>
+              </article>
+            </section>
+            <section
+              className="turn-card daily-challenge-card"
+              aria-labelledby="daily-challenge-title"
+            >
+              <div>
+                <p className="eyebrow">DAILY CHALLENGE</p>
+                <h2 id="daily-challenge-title">A new puzzle every day</h2>
+                <p>Solve a tactical position and keep your streak going.</p>
               </div>
-            ) : (
-              <div className="play-mode-actions">
-                <a className="primary-button" href="#online-account">
-                  Sign in to play online
-                </a>
-                <button disabled={busy} onClick={() => void startGuestSession()}>
-                  Play as guest
-                </button>
-              </div>
-            )}
-          </section>
-          <section
-            className="turn-card play-mode"
-            aria-labelledby="computer-mode"
-          >
-            <h2 id="computer-mode">Play against computer</h2>
-            <p>
-              Choose Orcas or Sharks and set the difficulty to Easy, Medium, or
-              Hard.
-            </p>
-            <Link className="primary-button" href="/play?opponent=computer">
-              Set up a computer game
-            </Link>
-          </section>
-        </div>
-        {!onlineUnavailable && (
+              <Link className="primary-button" href="/daily-puzzle">
+                Solve today’s puzzle
+              </Link>
+            </section>
+          </>
+        ) : (
+          <div className="play-modes">
+            <section
+              className="turn-card play-mode"
+              aria-labelledby="online-mode"
+            >
+              <h2 id="online-mode">Play online</h2>
+              <p>
+                {onlineUnavailable
+                  ? "Online accounts and matches are unavailable on this deployment."
+                  : "Find an opponent for an untimed, casual match or invite a friend."}
+              </p>
+              {onlineUnavailable ? null : account ? (
+                <div className="play-mode-actions">
+                  {searching === "casual" ? (
+                    <button
+                      className="primary-button"
+                      disabled={queueBusy}
+                      onClick={() => void queue("cancel")}
+                    >
+                      Cancel search
+                    </button>
+                  ) : (
+                    <button
+                      className="primary-button"
+                      disabled={queueBusy || busy || !!searching}
+                      onClick={() => void queue("enter")}
+                    >
+                      Find opponent
+                    </button>
+                  )}
+                  <button
+                    disabled={busy || !!searching || queueBusy}
+                    onClick={() => void create()}
+                  >
+                    Create Game
+                  </button>
+                </div>
+              ) : (
+                <div className="play-mode-actions">
+                  <a className="primary-button" href="#online-account">
+                    Sign in to play online
+                  </a>
+                  <button
+                    disabled={busy}
+                    onClick={() => void startGuestSession()}
+                  >
+                    Play as guest
+                  </button>
+                </div>
+              )}
+            </section>
+            <section
+              className="turn-card play-mode"
+              aria-labelledby="computer-mode"
+            >
+              <h2 id="computer-mode">Play against computer</h2>
+              <p>
+                Choose Orcas or Sharks and set the difficulty to Easy, Medium,
+                or Hard.
+              </p>
+              <Link className="primary-button" href="/play?opponent=computer">
+                Set up a computer game
+              </Link>
+            </section>
+          </div>
+        )}
+        {!isHome && !onlineUnavailable && (
           <section
             className="turn-card ranked-lobby"
             id="ranked-lobby"
@@ -394,249 +565,273 @@ export function OnlineLobby({
             <p role="status">{queueMessage}</p>
           </section>
         )}
-        <section className="turn-card lobby-account" id="online-account">
-          <h2>
-            {onlineUnavailable
-              ? "Your player account"
-              : account
-                ? "Account and private rooms"
-                : mode === "register"
-                  ? "Create a player account"
-                  : mode === "reset"
-                    ? "Reset your password"
-                    : "Your player account"}
-          </h2>
-          {onlineUnavailable ? (
-            <p>Sign-in and registration are currently unavailable.</p>
-          ) : account ? (
-            <>
-              <p>
-                {isGuest ? "Playing as guest" : "Signed in as"} {account}
-              </p>
-              {isGuest ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAccount(null);
-                    setIsGuest(false);
-                    setMode("register");
-                    setMessage("");
-                  }}
-                >
-                  Create account and keep progress
-                </button>
-              ) : (
-                <Link className="ranked-text-link" href={`/players/${account}`}>
-                  View player profile
-                </Link>
-              )}
-              <button
-                disabled={busy || !!searching || queueBusy}
-                onClick={() => void authenticate()}
-              >
-                Sign out
-              </button>
-              {returnRoom && (
-                <Link href={`/game/${returnRoom}`}>Return to room</Link>
-              )}
-              <form
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  const parsed = roomCodeSchema.safeParse(
-                    code.trim().toUpperCase(),
-                  );
-                  if (!parsed.success) {
-                    setMessage("Enter the 8-character room code.");
-                    return;
-                  }
-                  router.push(`/game/${parsed.data}`);
-                }}
-              >
-                <label htmlFor="room-code">Room code</label>
-                <input
-                  id="room-code"
-                  value={code}
-                  onChange={(event) => setCode(event.target.value)}
-                  autoCapitalize="characters"
-                  autoComplete="off"
-                  spellCheck={false}
-                  maxLength={8}
-                  placeholder="ABCDEFGH"
-                  required
-                />
-                <button
-                  type="submit"
-                  disabled={busy || !!searching || queueBusy}
-                >
-                  Join Game
-                </button>
-              </form>
-            </>
-          ) : (
-            <>
-              {mode === "reset" && (
-                <p>
-                  Enter the reset code from your server administrator and choose
-                  a new password.
-                </p>
-              )}
-              <form
-                key={mode}
-                method="post"
-                onSubmit={(event) =>
-                  void (mode === "google-register"
-                    ? signInWithGoogle(event)
-                    : authenticate(event))
-                }
-              >
-                {mode !== "reset" && (
-                  <>
-                    <label htmlFor="account-username">Username</label>
-                    <input
-                      id="account-username"
-                      name="username"
-                      autoComplete="username"
-                      pattern="[A-Za-z0-9_]{3,24}"
-                      title="Use 3–24 letters, digits, or underscores."
-                      required
-                      maxLength={24}
-                    />
-                  </>
-                )}
-                {mode === "register" && (
-                  <>
-                    <label htmlFor="account-email">Email address</label>
-                    <input
-                      id="account-email"
-                      name="email"
-                      type="email"
-                      autoComplete="email"
-                      maxLength={254}
-                      required
-                    />
-                  </>
-                )}
-                {mode !== "google-register" && (
-                  <>
-                    <label htmlFor="account-password">Password</label>
-                    <input
-                      id="account-password"
-                      name="password"
-                      type="password"
-                      minLength={mode === "login" ? undefined : 8}
-                      maxLength={128}
-                      autoComplete={
-                        mode === "login" ? "current-password" : "new-password"
-                      }
-                      required
-                    />
-                  </>
-                )}
-                {mode === "register" && (
-                  <>
-                    <label htmlFor="account-confirm-password">
-                      Confirm password
-                    </label>
-                    <input
-                      id="account-confirm-password"
-                      name="confirmPassword"
-                      type="password"
-                      minLength={8}
-                      maxLength={128}
-                      autoComplete="new-password"
-                      required
-                    />
-                  </>
-                )}
-                {(mode === "reset" ||
-                  mode === "google-register" ||
-                  (mode === "register" && requireSignupCode)) && (
-                  <>
-                    <label htmlFor="account-invitation">
-                      {mode === "reset" ? "Reset code" : "Signup code"}
-                    </label>
-                    <input
-                      id="account-invitation"
-                      name="invitation"
-                      autoComplete="off"
-                      required
-                      minLength={64}
-                      maxLength={64}
-                    />
-                  </>
-                )}
-                <button
-                  className="primary-button"
-                  disabled={busy}
-                  type="submit"
-                >
-                  {mode === "login"
-                    ? "Sign in"
+        {!isHome && (
+          <>
+            <section className="turn-card lobby-account" id="online-account">
+              <h2>
+                {onlineUnavailable
+                  ? "Your GridLox Games account"
+                  : account && !upgradingGuest
+                    ? "Account and private rooms"
                     : mode === "register"
-                      ? "Create account"
-                      : mode === "google-register"
-                        ? "Continue with Google"
-                        : "Reset password"}
-                </button>
-              </form>
-              {mode === "register" && (
-                <Link href={`${loginLink}#online-account`}>
-                  Back to sign in
-                </Link>
-              )}
-              {mode !== "login" && mode !== "register" && (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => {
-                    setMessage("");
-                    setMode("login");
-                  }}
-                >
-                  Back to sign in
-                </button>
-              )}
-              {mode === "login" && (
+                      ? "Create a player account"
+                      : mode === "reset"
+                        ? "Reset your password"
+                        : "Your GridLox Games account"}
+              </h2>
+              {onlineUnavailable ? (
+                <p>Sign-in and registration are currently unavailable.</p>
+              ) : account && !upgradingGuest ? (
                 <>
-                  {googleEnabled && (
-                    <>
-                      <button
-                        disabled={busy}
-                        onClick={() => void signInWithGoogle()}
-                      >
-                        Sign in with Google
-                      </button>
-                      <button
-                        disabled={busy}
-                        onClick={() => setMode("google-register")}
-                      >
-                        Create account with Google
-                      </button>
-                    </>
+                  <p>
+                    {isGuest ? "Playing as guest" : "Signed in as"} {account}
+                  </p>
+                  {isGuest ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMode("register");
+                        setMessage("");
+                      }}
+                    >
+                      Create account and keep progress
+                    </button>
+                  ) : (
+                    <Link
+                      className="ranked-text-link"
+                      href={`/players/${account}`}
+                    >
+                      View player profile
+                    </Link>
                   )}
-                  <div className="account-options">
-                    <Link href={registerLink}>Create an account</Link>
+                  <button
+                    disabled={busy || !!searching || queueBusy}
+                    onClick={() => void authenticate()}
+                  >
+                    Sign out
+                  </button>
+                  {returnRoom && (
+                    <Link href={`/game/${returnRoom}`}>Return to room</Link>
+                  )}
+                  <form
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      const parsed = roomCodeSchema.safeParse(
+                        code.trim().toUpperCase(),
+                      );
+                      if (!parsed.success) {
+                        setMessage("Enter the 8-character room code.");
+                        return;
+                      }
+                      router.push(`/game/${parsed.data}`);
+                    }}
+                  >
+                    <label htmlFor="room-code">Room code</label>
+                    <input
+                      id="room-code"
+                      value={code}
+                      onChange={(event) => setCode(event.target.value)}
+                      autoCapitalize="characters"
+                      autoComplete="off"
+                      spellCheck={false}
+                      maxLength={8}
+                      placeholder="ABCDEFGH"
+                      required
+                    />
+                    <button
+                      type="submit"
+                      disabled={busy || !!searching || queueBusy}
+                    >
+                      Join Game
+                    </button>
+                  </form>
+                </>
+              ) : (
+                <>
+                  {mode === "reset" && (
+                    <p>
+                      Enter the reset code from your server administrator and
+                      choose a new password.
+                    </p>
+                  )}
+                  <form
+                    key={mode}
+                    method="post"
+                    onSubmit={(event) =>
+                      void (mode === "google-register"
+                        ? signInWithGoogle(event)
+                        : authenticate(event))
+                    }
+                  >
+                    {mode !== "reset" && (
+                      <>
+                        <label htmlFor="account-username">Username</label>
+                        <input
+                          id="account-username"
+                          name="username"
+                          autoComplete="username"
+                          pattern="[A-Za-z0-9_]{3,24}"
+                          title="Use 3–24 letters, digits, or underscores."
+                          required
+                          maxLength={24}
+                        />
+                      </>
+                    )}
+                    {mode === "register" && (
+                      <>
+                        <label htmlFor="account-email">Email address</label>
+                        <input
+                          id="account-email"
+                          name="email"
+                          type="email"
+                          autoComplete="email"
+                          maxLength={254}
+                          required
+                        />
+                      </>
+                    )}
+                    {mode !== "google-register" && (
+                      <>
+                        <label htmlFor="account-password">Password</label>
+                        <input
+                          id="account-password"
+                          name="password"
+                          type="password"
+                          minLength={mode === "login" ? undefined : 8}
+                          maxLength={128}
+                          autoComplete={
+                            mode === "login"
+                              ? "current-password"
+                              : "new-password"
+                          }
+                          required
+                        />
+                      </>
+                    )}
+                    {mode === "register" && (
+                      <>
+                        <label htmlFor="account-confirm-password">
+                          Confirm password
+                        </label>
+                        <input
+                          id="account-confirm-password"
+                          name="confirmPassword"
+                          type="password"
+                          minLength={8}
+                          maxLength={128}
+                          autoComplete="new-password"
+                          required
+                        />
+                      </>
+                    )}
+                    {(mode === "reset" ||
+                      mode === "google-register" ||
+                      (mode === "register" && requireSignupCode)) && (
+                      <>
+                        <label htmlFor="account-invitation">
+                          {mode === "reset" ? "Reset code" : "Signup code"}
+                        </label>
+                        <input
+                          id="account-invitation"
+                          name="invitation"
+                          autoComplete="off"
+                          required
+                          minLength={64}
+                          maxLength={64}
+                        />
+                      </>
+                    )}
+                    <button
+                      className="primary-button"
+                      disabled={busy}
+                      type="submit"
+                    >
+                      {mode === "login"
+                        ? "Sign in"
+                        : mode === "register"
+                          ? "Create account"
+                          : mode === "google-register"
+                            ? "Continue with Google"
+                            : "Reset password"}
+                    </button>
+                  </form>
+                  {upgradingGuest ? (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => {
+                        setMode("login");
+                        setMessage("");
+                      }}
+                    >
+                      Cancel account creation
+                    </button>
+                  ) : mode === "register" ? (
+                    <Link href={`${loginLink}#online-account`}>
+                      Back to sign in
+                    </Link>
+                  ) : null}
+                  {mode !== "login" && mode !== "register" && (
                     <button
                       type="button"
                       disabled={busy}
                       onClick={() => {
                         setMessage("");
-                        setMode("reset");
+                        setMode("login");
                       }}
                     >
-                      Forgot your password?
+                      Back to sign in
                     </button>
-                  </div>
+                  )}
+                  {mode === "login" && (
+                    <>
+                      {googleEnabled && (
+                        <>
+                          <button
+                            disabled={busy}
+                            onClick={() => void signInWithGoogle()}
+                          >
+                            Sign in with Google
+                          </button>
+                          <button
+                            disabled={busy}
+                            onClick={() => setMode("google-register")}
+                          >
+                            Create account with Google
+                          </button>
+                        </>
+                      )}
+                      <div className="account-options">
+                        <Link href={registerLink}>Create an account</Link>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => {
+                            setMessage("");
+                            setMode("reset");
+                          }}
+                        >
+                          Forgot your password?
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </>
               )}
-            </>
-          )}
-          <p role="status">{message}</p>
-        </section>
-        <div className="lobby-links">
-          <Link href="/play">Play locally on one device</Link>
-        </div>
+              <p role="status">{message}</p>
+            </section>
+            <div className="lobby-links">
+              <Link href="/play">Play locally on one device</Link>
+            </div>
+          </>
+        )}
+        {!isHome && (
+          <footer>
+            <GridLoxLogo variant="footer" />
+          </footer>
+        )}
       </main>
+      {isHome && <SiteFooter />}
     </div>
   );
 }

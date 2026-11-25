@@ -5,6 +5,7 @@ import { OnlineLobby } from "@/components/lobby/online-lobby";
 export default function Home() {
   return (
     <OnlineLobby
+      isHome
       onlineUnavailable={!process.env.PRISMA_DATABASE_URL}
       googleEnabled={!!googleConfiguration()}
       requireSignupCode={signupCodeRequired()}

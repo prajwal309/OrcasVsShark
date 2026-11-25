@@ -13,6 +13,11 @@ export default defineConfig({
   projects: [
     { name: "desktop", use: { ...devices["Desktop Chrome"] } },
     {
+      name: "tablet",
+      testMatch: "landing.spec.ts",
+      use: { ...devices["iPad (gen 7)"], defaultBrowserType: "chromium" },
+    },
+    {
       name: "mobile",
       use: { ...devices["iPhone 13"], defaultBrowserType: "chromium" },
     },

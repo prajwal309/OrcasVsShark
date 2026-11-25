@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { GameHeader } from "@/components/navigation/game-header";
 import { useEffect, useState } from "react";
 import { AccountLink } from "@/components/navigation/account-navigation";
-import { SiteThemeSelect } from "@/components/navigation/site-theme-select";
-import { Rules } from "@/components/game/game";
+import { Rules } from "@/components/game/rules";
 import {
   curriculum,
   getExercise,
@@ -136,27 +136,14 @@ export function Academy({
 
   return (
     <div className={`site-shell theme-${theme}`}>
-      <header className="site-header">
-        <div className="header-identity">
-          <Link className="brand" href="/" aria-label="Orcas vs Sharks home">
-            <span className="brand-mark" aria-hidden="true">
-              ◈
-            </span>
-            <span>
-              ORCAS <span className="brand-vs">vs</span> SHARKS
-            </span>
-          </Link>
-          <AccountLink />
-        </div>
-      </header>
+      <GameHeader account={<AccountLink />} />
       <main className="academy main-content">
         <div className="academy-heading">
           <div>
             <h1>Learn to Play</h1>
-            <p>Learn Bagh Chal one move at a time.</p>
+            <p>Learn Baghchal one move at a time.</p>
           </div>
           <div className="academy-appearance">
-            <SiteThemeSelect />
             <label>
               Board theme
               <select

@@ -206,7 +206,10 @@ test("a Vercel-style restart preserves PostgreSQL accounts, sessions, progress a
     const account = await fetch(server.url + "/api/account", {
       headers: { Cookie: cookies[0] },
     });
-    expect(await account.json()).toEqual({ username: usernames[0] });
+    expect(await account.json()).toEqual({
+      username: usernames[0],
+      isGuest: false,
+    });
     const room = await fetch(server.url + route, {
       headers: { Cookie: sharks },
     }).then((response) => response.json());

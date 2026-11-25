@@ -202,23 +202,22 @@ export async function POST(request: Request) {
       let id = login?.id;
       let name = "username" in body ? body.username : "";
       if (body.action === "register") {
-        id =
-          previousAccount?.accounts.is_guest
-            ? await registerGuestAccount(
-                db,
-                previousAccount.accounts.id,
-                name,
-                body.email,
-                body.invitation && hashToken(body.invitation),
-                digest,
-              )
-            : await createAccount(
-                db,
-                name,
-                body.email,
-                body.invitation && hashToken(body.invitation),
-                { passwordHash: digest },
-              );
+        id = previousAccount?.accounts.is_guest
+          ? await registerGuestAccount(
+              db,
+              previousAccount.accounts.id,
+              name,
+              body.email,
+              body.invitation && hashToken(body.invitation),
+              digest,
+            )
+          : await createAccount(
+              db,
+              name,
+              body.email,
+              body.invitation && hashToken(body.invitation),
+              { passwordHash: digest },
+            );
       } else if (body.action === "reset") {
         const invite = await db.query<{ reset_account: string }>(
           `DELETE FROM account_invites WHERE token_hash = $1 AND expires_at > EXTRACT(EPOCH FROM clock_timestamp())

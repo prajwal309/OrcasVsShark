@@ -3,6 +3,8 @@ import { googleConfiguration } from "@/lib/auth/google";
 import { OnlineLobby } from "@/components/lobby/online-lobby";
 import { roomCodeSchema } from "@/lib/multiplayer/protocol";
 
+export const metadata = { title: "Online Play and Accounts" };
+
 export default async function OnlinePage({
   searchParams,
 }: {

@@ -3,6 +3,7 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   serverExternalPackages: ["@node-rs/argon2"],
   distDir: process.env.BUILD_OUTPUT_DIR || ".next",
+  images: { qualities: [75, 90] },
   async headers() {
     return [
       {

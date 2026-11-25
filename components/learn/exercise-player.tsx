@@ -1,5 +1,6 @@
 "use client";
 
+import type { DailyAction } from "@/lib/daily/status";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Board } from "@/components/board/board";
@@ -37,19 +38,17 @@ export function ExercisePlayer({
   kind,
   next,
   theme,
+  dailyPuzzleMode = false,
+  dailyPractice = false,
   onPuzzleAttempt,
 }: {
   exercise: Exercise;
   kind: ActivityKind;
   next?: Exercise;
   theme: BoardTheme;
-  onPuzzleAttempt?: (event: {
-    action: "attempt" | "hint";
-    answer?: string | number;
-    hintsUsed: number;
-    seconds: number;
-    opening?: string | null;
-  }) => void;
+  dailyPuzzleMode?: boolean;
+  dailyPractice?: boolean;
+  onPuzzleAttempt?: (event: DailyAction, correct?: boolean) => void;
 }) {
   const { progress, ready, record } = useProgress();
   const { id, goal } = exercise;
@@ -74,7 +73,38 @@ export function ExercisePlayer({
     state: GameState;
     move?: Move;
     points: number;
+    practice: boolean;
   } | null>(null);
+  const [solutionShown, setSolutionShown] = useState(false);
+  const [solutionStep, setSolutionStep] = useState(0);
+  const [solutionPlaying, setSolutionPlaying] = useState(false);
+  const solutionLine = useMemo(() => {
+    if (!dailyPuzzleMode) return null;
+    const { start, answers: solutions } = prepareExercise(exercise);
+    const states = [start];
+    const moves: Move[] = [];
+    const first = solutions[0];
+    if (!first) return { states, moves };
+
+    let current = applyMove(start, first.move);
+    states.push(current);
+    moves.push(first.move);
+    if (goal.kind === "win-in-two") {
+      const response = first.replies[0];
+      if (response) {
+        current = applyMove(current, response.move);
+        states.push(current);
+        moves.push(response.move);
+        const finish = response.answers[0];
+        if (finish) {
+          current = applyMove(current, finish);
+          states.push(current);
+          moves.push(finish);
+        }
+      }
+    }
+    return { states, moves };
+  }, [dailyPuzzleMode, exercise, goal.kind]);
   const analysis = useComputer(
     state,
     analysisRequested && !completion,
@@ -90,7 +120,7 @@ export function ExercisePlayer({
   const text = (value: string) => learningText(value, theme);
   const side = themeLabels(theme).sides[state.turn];
   const visibleMoves =
-    completion || goal.kind === "choice"
+    completion || solutionShown || goal.kind === "choice"
       ? []
       : selected
         ? getLegalMovesFrom(state, selected)
@@ -106,6 +136,23 @@ export function ExercisePlayer({
     heading.current?.focus({ preventScroll: true });
   }, [ready, record, kind, id]);
 
+  useEffect(() => {
+    if (!solutionPlaying || !solutionLine) return;
+    const reducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    const nextStep = solutionStep + 1;
+    const timer = window.setTimeout(
+      () => {
+        setSolutionStep(nextStep);
+        if (nextStep >= solutionLine.states.length - 1)
+          setSolutionPlaying(false);
+      },
+      reducedMotion ? 0 : 650,
+    );
+    return () => window.clearTimeout(timer);
+  }, [solutionLine, solutionPlaying, solutionStep]);
+
   function attempt(answer: string | number, move?: Move) {
     const success = acceptedAnswer(exercise, answer, item.opening);
     const seconds = elapsedSeconds(started);
@@ -114,21 +161,25 @@ export function ExercisePlayer({
       { action: "attempt", answer, opening: item.opening, seconds },
     );
     if (kind === "puzzle")
-      onPuzzleAttempt?.({
-        action: "attempt",
-        answer: success ? answer : undefined,
-        hintsUsed: item.hintIndex,
-        seconds,
-        opening: item.opening,
-      });
+      onPuzzleAttempt?.(
+        {
+          action: "attempt",
+          answer: success ? answer : undefined,
+          hintsUsed: item.hintIndex,
+          seconds,
+          opening: item.opening,
+        },
+        success,
+      );
     if (success) {
       setCompletion({
         state: move ? applyMove(state, move) : state,
         move,
         points:
-          kind === "puzzle" && item.completedAt === null
+          kind === "puzzle" && !dailyPractice && item.completedAt === null
             ? puzzlePoints[exercise.level]
             : 0,
+        practice: dailyPractice,
       });
       setSelected(null);
       setMessage("");
@@ -144,7 +195,7 @@ export function ExercisePlayer({
   }
 
   function playNode(node: NodeId) {
-    if (!ready || completion) return;
+    if (!ready || completion || solutionShown) return;
     if (goal.kind === "choice") {
       if (!goal.example) return;
       const [from, to] = goal.example.move.split(/[x-]/);
@@ -197,6 +248,11 @@ export function ExercisePlayer({
           seconds: elapsedSeconds(started),
         },
       );
+      onPuzzleAttempt?.({
+        action: "stage",
+        hintsUsed: item.hintIndex,
+        seconds: 0,
+      });
       setSelected(null);
       setMessage("Good opening. The defender replied. Find the winning move.");
       setReview(false);
@@ -215,8 +271,29 @@ export function ExercisePlayer({
     setSelected(null);
     setSuggestion(null);
     setAnalysisRequested(false);
+    setSolutionShown(false);
+    setSolutionStep(0);
+    setSolutionPlaying(false);
     setMessage("The starting position is ready.");
     elapsedSeconds(started);
+  }
+
+  function showSolution() {
+    if (!solutionLine) return;
+    onPuzzleAttempt?.({
+      action: "reveal",
+      hintsUsed: item.hintIndex,
+      seconds: 0,
+    });
+    setSolutionShown(true);
+    setSolutionStep(0);
+    setSolutionPlaying(solutionLine.states.length > 1);
+  }
+
+  function replaySolution() {
+    if (!solutionLine) return;
+    setSolutionStep(0);
+    setSolutionPlaying(solutionLine.states.length > 1);
   }
 
   const comparisonRows = useMemo(
@@ -232,176 +309,289 @@ export function ExercisePlayer({
       ? prepareExercise(exercise).answers[0]
       : undefined;
   const sampleReply = sample?.replies[0];
-  const displayed = completion?.state ?? state;
+  const displayed =
+    solutionShown && solutionLine
+      ? solutionLine.states[solutionStep]
+      : (completion?.state ?? state);
+  const solutionMove =
+    solutionShown && solutionStep > 0
+      ? solutionLine?.moves[solutionStep - 1]
+      : undefined;
+  const displayedSide = themeLabels(theme).sides[displayed.turn];
   return (
     <article
-      className="academy-exercise"
+      className={`academy-exercise${dailyPuzzleMode ? " daily-puzzle-exercise" : ""}`}
       id="academy-activity"
       aria-labelledby="exercise-heading"
     >
-      <div className="academy-instructions turn-card">
-        <p className="academy-meta">
-          {kind === "quiz" ? "Knowledge check" : `${exercise.level} ${kind}`}
-        </p>
-        <h2 id="exercise-heading" ref={heading} tabIndex={-1}>
-          {text(exercise.title)}
-        </h2>
-        <p>{text(exercise.intro)}</p>
-        <p className="academy-objective">{text(exercise.objective)}</p>
-        {reply && !completion && (
-          <p>
-            Defender’s reply <strong>{formatMove(reply)}</strong>
+      <div
+        className={
+          dailyPuzzleMode ? "daily-puzzle-sidebar" : "academy-exercise-sidebar"
+        }
+      >
+        <div className="academy-instructions turn-card">
+          <p className="academy-meta">
+            {kind === "quiz" ? "Knowledge check" : `${exercise.level} ${kind}`}
           </p>
-        )}
-        {goal.kind === "choice" && !completion && (
-          <div className="academy-options">
-            {goal.choices.map((choice, index) => (
+          <h2 id="exercise-heading" ref={heading} tabIndex={-1}>
+            {text(exercise.title)}
+          </h2>
+          <p>{text(exercise.intro)}</p>
+          <p className="academy-objective">{text(exercise.objective)}</p>
+          {reply && !completion && (
+            <p>
+              Defender’s reply <strong>{formatMove(reply)}</strong>
+            </p>
+          )}
+          {goal.kind === "choice" && !completion && (
+            <div className="academy-options">
+              {goal.choices.map((choice, index) => (
+                <button
+                  key={choice}
+                  disabled={!ready}
+                  onClick={() => attempt(index)}
+                >
+                  {text(choice)}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="academy-actions">
+            {!completion && item.hintIndex < exercise.hints.length && (
               <button
-                key={choice}
                 disabled={!ready}
-                onClick={() => attempt(index)}
+                onClick={() => {
+                  record({ kind, activityId: id }, { action: "hint" });
+                  if (kind === "puzzle")
+                    onPuzzleAttempt?.({
+                      action: "hint",
+                      hintsUsed: item.hintIndex + 1,
+                      seconds: elapsedSeconds(started),
+                    });
+                }}
               >
-                {text(choice)}
+                Show hint
               </button>
-            ))}
+            )}
+            {!completion && !dailyPuzzleMode && (
+              <button disabled={!ready} onClick={retry}>
+                Try again
+              </button>
+            )}
+            {!completion && kind === "puzzle" && !dailyPuzzleMode && (
+              <button aria-expanded={review} onClick={() => setReview(!review)}>
+                {review ? "Hide solution" : "Review solution"}
+              </button>
+            )}
+            {exercise.id === "compare-candidates" && !completion && (
+              <button
+                aria-expanded={comparison}
+                onClick={() => setComparison(!comparison)}
+              >
+                Compare moves
+              </button>
+            )}
+            {comparison && !completion && (
+              <button
+                disabled={analysisRequested && !analysis.failed}
+                onClick={() => {
+                  if (analysis.failed) analysis.retry();
+                  setAnalysisRequested(true);
+                }}
+              >
+                {analysis.failed
+                  ? "Retry computer analysis"
+                  : "Ask the computer"}
+              </button>
+            )}
           </div>
-        )}
-        <div className="academy-actions">
-          {!completion && item.hintIndex < exercise.hints.length && (
-            <button
-              disabled={!ready}
-              onClick={() => {
-                record({ kind, activityId: id }, { action: "hint" });
-                if (kind === "puzzle")
-                  onPuzzleAttempt?.({
-                    action: "hint",
-                    hintsUsed: item.hintIndex + 1,
-                    seconds: elapsedSeconds(started),
-                  });
-              }}
-            >
-              Show hint
-            </button>
+          {review && !completion && (
+            <div className="academy-hint">
+              <h3>Solution</h3>
+              <p>
+                {goal.kind === "choice"
+                  ? text(goal.choices[goal.answer])
+                  : answers.map(formatMove).join(", ")}
+              </p>
+              {sample && sampleReply && (
+                <p>
+                  One line is {formatMove(sample.move)},{" "}
+                  {formatMove(sampleReply.move)}, then{" "}
+                  {formatMove(sampleReply.answers[0])} to win.
+                </p>
+              )}
+              <p>{text(exercise.explanation)}</p>
+            </div>
           )}
-          {!completion && (
-            <button disabled={!ready} onClick={retry}>
-              Try again
-            </button>
-          )}
-          {!completion && kind === "puzzle" && (
-            <button aria-expanded={review} onClick={() => setReview(!review)}>
-              {review ? "Hide solution" : "Review solution"}
-            </button>
-          )}
-          {exercise.id === "compare-candidates" && !completion && (
-            <button
-              aria-expanded={comparison}
-              onClick={() => setComparison(!comparison)}
-            >
-              Compare moves
-            </button>
+          {comparison && !completion && suggestion && (
+            <p role="status">
+              Computer suggestion {formatMove(suggestion)}. This is a search
+              candidate.
+            </p>
           )}
           {comparison && !completion && (
-            <button
-              disabled={analysisRequested && !analysis.failed}
-              onClick={() => {
-                if (analysis.failed) analysis.retry();
-                setAnalysisRequested(true);
-              }}
-            >
-              {analysis.failed ? "Retry computer analysis" : "Ask the computer"}
-            </button>
+            <table className="academy-comparison">
+              <caption>Legal replies after each candidate</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Move</th>
+                  <th scope="col">Replies</th>
+                  <th scope="col">Captures</th>
+                </tr>
+              </thead>
+              <tbody>
+                {comparisonRows.map(({ move, replies, captures }) => (
+                  <tr key={moveCode(move)}>
+                    <th scope="row">{formatMove(move)}</th>
+                    <td>{replies}</td>
+                    <td>{captures}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          {kind === "lesson" && !completion && item.completedAt != null && (
+            <p>Previously completed.</p>
+          )}
+          {kind === "puzzle" && !completion && item.completedAt != null && (
+            <p>Previously solved.</p>
           )}
         </div>
-        {review && !completion && (
-          <div className="academy-hint">
-            <h3>Solution</h3>
-            <p>
-              {goal.kind === "choice"
-                ? text(goal.choices[goal.answer])
-                : answers.map(formatMove).join(", ")}
-            </p>
-            {sample && sampleReply && (
-              <p>
-                One line is {formatMove(sample.move)},{" "}
-                {formatMove(sampleReply.move)}, then{" "}
-                {formatMove(sampleReply.answers[0])} to win.
-              </p>
-            )}
-            <p>{text(exercise.explanation)}</p>
-          </div>
-        )}
-        {comparison && !completion && suggestion && (
-          <p role="status">
-            Computer suggestion {formatMove(suggestion)}. This is a search
-            candidate.
-          </p>
-        )}
-        {comparison && !completion && (
-          <table className="academy-comparison">
-            <caption>Legal replies after each candidate</caption>
-            <thead>
-              <tr>
-                <th scope="col">Move</th>
-                <th scope="col">Replies</th>
-                <th scope="col">Captures</th>
-              </tr>
-            </thead>
-            <tbody>
-              {comparisonRows.map(({ move, replies, captures }) => (
-                <tr key={moveCode(move)}>
-                  <th scope="row">{formatMove(move)}</th>
-                  <td>{replies}</td>
-                  <td>{captures}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-        {kind === "lesson" && !completion && item.completedAt != null && (
-          <p>Previously completed.</p>
-        )}
-        {kind === "puzzle" && !completion && item.completedAt != null && (
-          <p>Previously solved.</p>
+        {dailyPuzzleMode && completion && (
+          <>
+            <div className="turn-card daily-completion-panel">
+              <div role="status" aria-live="polite">
+                <strong>
+                  {completion.practice
+                    ? "Practice complete."
+                    : "Solution verified."}
+                </strong>
+                <p>{text(exercise.explanation)}</p>
+                {completion.points > 0 && (
+                  <p>+{completion.points} puzzle points</p>
+                )}
+              </div>
+            </div>
+            <div className="academy-actions daily-completion-actions">
+              <button onClick={retry}>Play again</button>
+              <Link className="primary-button" href="/learn?section=progress">
+                View progress
+              </Link>
+            </div>
+          </>
         )}
       </div>
       <div className="academy-lesson-board">
         <p className="academy-board-caption">
-          {completion ? "Exercise complete" : `${side} to play`}
+          {solutionShown
+            ? solutionPlaying
+              ? "Solution replay"
+              : "Solution shown"
+            : completion
+              ? "Exercise complete"
+              : `${displayedSide} to play`}
         </p>
         <p className="academy-board-counts">
           {displayed.sharksPlaced}/20 placed · {displayed.sharksCaptured}/5
           captured
         </p>
+        {dailyPuzzleMode && (
+          <div className="daily-celebration-slot">
+            {completion && !completion.practice && (
+              <div
+                className="daily-celebration"
+                role="status"
+                aria-live="polite"
+              >
+                <svg
+                  className="daily-trophy"
+                  viewBox="0 0 32 32"
+                  aria-hidden="true"
+                >
+                  <path d="M9 5h14v6a7 7 0 0 1-5 6.7V22h5v3H9v-3h5v-4.3A7 7 0 0 1 9 11V5Zm-3 3H3v3a6 6 0 0 0 6 6v-3a3 3 0 0 1-3-3V8Zm20 0v6a3 3 0 0 1-3 3v3a6 6 0 0 0 6-6V8h-3Z" />
+                </svg>
+                <strong>Puzzle Solved!</strong>
+                {Array.from({ length: 12 }, (_, index) => (
+                  <span
+                    className={`daily-confetti confetti-${index % 8}`}
+                    key={index}
+                    aria-hidden="true"
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         <Board
           state={displayed}
           selected={selected}
           moves={visibleMoves}
-          lastMove={completion?.move ?? reply ?? undefined}
+          lastMove={solutionMove ?? completion?.move ?? reply ?? undefined}
           flipped={false}
           theme={theme}
           onNode={playNode}
-          focusNodes={completion || reply ? [] : exercise.focus}
+          focusNodes={
+            completion || solutionShown || reply ? [] : exercise.focus
+          }
         />
-        <div className="academy-feedback" role="status" aria-live="polite">
-          {completion ? (
-            <div className="academy-success">
-              <strong>
-                {kind === "puzzle"
-                  ? "Puzzle solved!"
-                  : kind === "lesson"
-                    ? "Lesson complete!"
-                    : "Correct!"}
-              </strong>
-              <p>{text(exercise.explanation)}</p>
-              {completion.points > 0 && (
-                <p>+{completion.points} puzzle points</p>
-              )}
-            </div>
-          ) : (
-            message || (reply ? "Find the winning continuation." : "")
-          )}
-        </div>
+        {dailyPuzzleMode && !completion && (
+          <div className="daily-solution-controls turn-card">
+            {!solutionShown ? (
+              <button
+                className="primary-button"
+                disabled={!ready}
+                onClick={showSolution}
+              >
+                Show Solution
+              </button>
+            ) : solutionLine?.moves.length === 0 && goal.kind === "choice" ? (
+              <>
+                <p className="daily-solution-answer">
+                  <strong>Answer:</strong> {text(goal.choices[goal.answer])}{" "}
+                  {text(exercise.explanation)}
+                </p>
+                <button onClick={retry}>Retry puzzle</button>
+              </>
+            ) : (
+              <>
+                <button
+                  className="primary-button"
+                  disabled={solutionPlaying}
+                  onClick={replaySolution}
+                >
+                  Replay solution
+                </button>
+                <button onClick={retry}>Retry puzzle</button>
+                <span role="status" aria-live="polite">
+                  {solutionPlaying
+                    ? "Demonstrating the solution."
+                    : "Solution revealed. Retry to solve it yourself."}
+                </span>
+              </>
+            )}
+          </div>
+        )}
+        {(!dailyPuzzleMode || !completion) && (
+          <div className="academy-feedback" role="status" aria-live="polite">
+            {completion ? (
+              <div className="academy-success">
+                <strong>
+                  {kind === "puzzle"
+                    ? "Puzzle solved!"
+                    : kind === "lesson"
+                      ? "Lesson complete!"
+                      : "Correct!"}
+                </strong>
+                <p>{text(exercise.explanation)}</p>
+                {completion.points > 0 && (
+                  <p>+{completion.points} puzzle points</p>
+                )}
+              </div>
+            ) : (
+              message || (reply ? "Find the winning continuation." : "")
+            )}
+          </div>
+        )}
         <p className="academy-hint" role="status">
           {!completion && item.hintIndex > 0 && (
             <>
@@ -410,7 +600,7 @@ export function ExercisePlayer({
             </>
           )}
         </p>
-        {completion && (
+        {completion && !dailyPuzzleMode && (
           <div className="academy-actions">
             <button onClick={retry}>Play again</button>
             {completion && next && (

@@ -91,7 +91,10 @@ export async function registerGuestAccount(
     );
     if (!invitation.rowCount) throw invalidInvitation();
   }
-  const { rows } = await db.query<{ username_taken: boolean; email_taken: boolean }>(
+  const { rows } = await db.query<{
+    username_taken: boolean;
+    email_taken: boolean;
+  }>(
     `SELECT
        EXISTS (SELECT 1 FROM accounts WHERE username = $2 AND id <> $1) AS username_taken,
        EXISTS (SELECT 1 FROM accounts WHERE email = $3 AND id <> $1) AS email_taken`,

@@ -1,22 +1,35 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ExercisePlayer } from "@/components/learn/exercise-player";
+import { ProgressProvider } from "@/components/learn/progress-provider";
+import { emptyProgress } from "@/lib/learn/progress";
+import { applyDailyAction, type DailyAction } from "@/lib/daily/status";
 import type { Puzzle } from "@/lib/learn/exercises";
 import type { BoardTheme } from "@/lib/presentation/board-themes";
+import { useDailyDate, useDailyProgress } from "./daily-status";
 
 export function DailyPuzzle({
   date,
   puzzle,
   registered,
+  followToday,
   theme,
 }: {
   date: string;
   puzzle: Puzzle;
   registered: boolean;
+  followToday: boolean;
   theme: BoardTheme;
 }) {
+  const router = useRouter();
+  const today = useDailyDate();
+  const daily = useDailyProgress(date, !followToday && date !== today);
+  const pending = useRef(Promise.resolve());
+  const sequence = useRef(0);
   const [syncMessage, setSyncMessage] = useState("");
+  const [statsUnavailable, setStatsUnavailable] = useState(false);
   const [summary, setSummary] = useState<{
     attempted: number;
     solved: number;
@@ -28,6 +41,10 @@ export function DailyPuzzle({
     : 0;
 
   useEffect(() => {
+    if (followToday && date !== today) router.refresh();
+  }, [date, followToday, router, today]);
+
+  useEffect(() => {
     if (!registered) return;
     const controller = new AbortController();
     void fetch("/api/daily-puzzle", { signal: controller.signal })
@@ -37,38 +54,49 @@ export function DailyPuzzle({
       })
       .catch((error: unknown) => {
         if (error instanceof Error && error.name === "AbortError") return;
-        setSyncMessage("Your account puzzle statistics are unavailable.");
+        setStatsUnavailable(true);
       });
     return () => controller.abort();
   }, [registered]);
 
-  async function recordAttempt(event: {
-    action: "attempt" | "hint";
-    answer?: string | number;
-    hintsUsed: number;
-    seconds: number;
-    opening?: string | null;
-  }) {
+  function recordAttempt(event: DailyAction, correct = false) {
+    const next = applyDailyAction(daily.read(), event, correct);
+    daily.save(next);
     if (!registered) return;
-    try {
-      const response = await fetch("/api/daily-puzzle", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          date,
-          puzzleId: puzzle.id,
-          ...event,
-        }),
-      });
-      if (!response.ok) throw new Error("Daily puzzle stats could not sync.");
-      const statsResponse = await fetch("/api/daily-puzzle");
-      if (statsResponse.ok) setSummary(await statsResponse.json());
-      setSyncMessage("");
-    } catch {
-      setSyncMessage(
-        "Your puzzle progress is saved on this device; account statistics could not sync.",
-      );
-    }
+    const revision = ++sequence.current;
+    pending.current = pending.current.then(async () => {
+      try {
+        const response = await fetch("/api/daily-puzzle", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            date,
+            puzzleId: puzzle.id,
+            ...event,
+            hintsUsed: next.hintsUsed,
+            solutionRevealed: next.status === "revealed",
+          }),
+        });
+        if (!response.ok) throw new Error("Daily puzzle stats could not sync.");
+        const receipt = await response.json();
+        if (!receipt.recorded)
+          throw new Error("Daily puzzle event was rejected.");
+        if (revision === sequence.current) daily.save(receipt.progress);
+        setSyncMessage("");
+        if (receipt.solved) {
+          const statsResponse = await fetch("/api/daily-puzzle");
+          if (statsResponse.ok) {
+            setSummary(await statsResponse.json());
+            setStatsUnavailable(false);
+          } else
+            setSyncMessage("Solved; account statistics could not refresh.");
+        }
+      } catch {
+        setSyncMessage(
+          "Your puzzle progress is saved on this device; account statistics could not sync.",
+        );
+      }
+    });
   }
 
   const activityPuzzle = {
@@ -77,9 +105,12 @@ export function DailyPuzzle({
   };
 
   return (
-    <>
+    <div className="daily-puzzle-content">
       {registered && (
-        <section className="turn-card daily-stats" aria-label="Puzzle statistics">
+        <section
+          className="turn-card daily-stats"
+          aria-label="Puzzle statistics"
+        >
           <h2>Your puzzle progress</h2>
           {summary ? (
             <p>
@@ -87,18 +118,30 @@ export function DailyPuzzle({
               {successRate}% success rate · {summary.attempts} attempts ·{" "}
               {summary.streak}-day streak
             </p>
+          ) : statsUnavailable ? (
+            <p role="status">Your account puzzle statistics are unavailable.</p>
           ) : (
             <p>Loading account statistics…</p>
           )}
         </section>
       )}
-      <ExercisePlayer
-        exercise={activityPuzzle}
-        kind="puzzle"
-        theme={theme}
-        onPuzzleAttempt={(event) => void recordAttempt(event)}
-      />
+      <ProgressProvider
+        key={daily.key}
+        account={null}
+        initial={emptyProgress}
+        storageKey={`${daily.key}:round`}
+        mirrorToParent={daily.progress.status !== "revealed"}
+      >
+        <ExercisePlayer
+          exercise={activityPuzzle}
+          kind="puzzle"
+          theme={theme}
+          dailyPuzzleMode
+          dailyPractice={daily.progress.status === "revealed"}
+          onPuzzleAttempt={recordAttempt}
+        />
+      </ProgressProvider>
       {syncMessage && <p role="status">{syncMessage}</p>}
-    </>
+    </div>
   );
 }

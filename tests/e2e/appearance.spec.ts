@@ -67,8 +67,10 @@ test("uses the Royal Navy palette by default and keeps controls legible on both 
 test("site appearance follows navigation independently of Academy and game board artwork", async ({
   page,
 }) => {
-  await page.goto("/learn?section=puzzles&activity=opening-jump");
+  await page.goto("/");
   await page.getByLabel("Site appearance").selectOption("ivory");
+  await page.goto("/learn?section=puzzles&activity=opening-jump");
+  await expect(page.getByLabel("Site appearance")).toHaveCount(0);
   await page.getByLabel("Board theme").selectOption("tigers-goats");
   const shark = page.getByRole("button", { name: /^c3, goat/ });
   const orca = page.getByRole("button", { name: /^b2, tiger/ });
@@ -92,6 +94,7 @@ test("site appearance follows navigation independently of Academy and game board
     "data-site-theme",
     "royal",
   );
+  await expect(page.getByLabel("Site appearance")).toHaveCount(0);
   await expect(page.getByLabel("Board theme")).toHaveValue("tigers-goats");
   await expect(shark).toBeVisible();
   await expect(orca).toBeVisible();

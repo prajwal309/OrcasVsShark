@@ -1,0 +1,129 @@
+.content {
+  max-width: 1020px;
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: clamp(24px, 6vw, 80px);
+  padding-block: clamp(12px, 4vw, 52px);
+}
+
+.hero h1 {
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: clamp(2.25rem, 6vw, 4.25rem);
+  line-height: 1.06;
+  letter-spacing: -0.035em;
+  margin: 0 0 16px;
+}
+
+.hero p,
+.section p {
+  max-width: 64ch;
+  color: var(--muted);
+  line-height: 1.75;
+  margin: 0;
+}
+
+.hero p {
+  font-size: clamp(1rem, 2vw, 1.15rem);
+}
+
+.section {
+  display: grid;
+  grid-template-columns: minmax(10rem, 1fr) minmax(0, 2.5fr);
+  align-items: start;
+  gap: clamp(16px, 4vw, 48px);
+  padding-block: clamp(28px, 5vw, 52px);
+  border-top: 1px solid var(--hairline);
+  scroll-margin-top: 20px;
+}
+
+.section h2 {
+  font-family: var(--font-display);
+  font-size: clamp(1.45rem, 3vw, 2rem);
+  font-weight: 500;
+  line-height: 1.15;
+  margin: 0;
+}
+
+.copy {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.copy h3 {
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 650;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.copy > h3 {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+}
+
+.links,
+.features {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.links {
+  display: flex;
+  gap: 8px 20px;
+  flex-wrap: wrap;
+}
+
+.links a,
+.feedback,
+.features a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.links a:hover,
+.feedback:hover,
+.features a:hover {
+  color: var(--text);
+}
+
+.links a,
+.feedback {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 44px;
+  justify-self: start;
+}
+
+.features {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+  gap: 16px 24px;
+  margin-top: 10px;
+}
+
+.features li {
+  padding-top: 13px;
+  border-top: 1px solid var(--hairline);
+}
+
+.features p {
+  margin-top: 6px;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 600px) {
+  .hero,
+  .section {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

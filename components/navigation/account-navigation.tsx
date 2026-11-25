@@ -51,7 +51,8 @@ export function AccountLink({
     <Link
       className="account-link"
       href={href}
-      title={username ?? undefined}
+      aria-label={username ?? "Login"}
+      title={username ?? "Login"}
       data-signed-in={username ? "" : undefined}
     >
       <svg

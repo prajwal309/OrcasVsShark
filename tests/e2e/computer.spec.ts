@@ -137,7 +137,9 @@ test("the online-first home also opens computer setup without signing in", async
   ).toBeVisible();
   await page.getByRole("link", { name: "Set up a computer game" }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
-  await expect(page.getByLabel("Opponent")).toHaveValue("computer");
+  await expect(page.getByRole("combobox", { name: "Opponent" })).toHaveValue(
+    "computer",
+  );
   await page.getByLabel("Difficulty").selectOption("hard");
   await page.getByRole("button", { name: "Start game" }).click();
   await page.getByRole("button", { name: "Computer game setup" }).click();

@@ -20,16 +20,31 @@ import {
   type Progress,
 } from "@/lib/learn/progress";
 import { z } from "zod";
+import {
+  guestProgressImportKey,
+  guestProgressKey,
+} from "@/lib/learn/guest-progress";
 
-const guestKey = "orcas-academy-guest-v1";
 const outboxSchema = z.array(eventSchema);
 
-function readStorage(key: string) {
+function readStoredString(key: string) {
   try {
-    return JSON.parse(localStorage.getItem(key) ?? "null") as unknown;
+    return localStorage.getItem(key);
   } catch {
     return null;
   }
+}
+
+function parseStorage(value: string | null) {
+  try {
+    return JSON.parse(value ?? "null") as unknown;
+  } catch {
+    return null;
+  }
+}
+
+function readStorage(key: string) {
+  return parseStorage(readStoredString(key));
 }
 
 function writeStorage(key: string, value: unknown) {
@@ -56,13 +71,20 @@ export function useProgress() {
 
 export function ProgressProvider({
   account,
+  username,
   initial,
+  storageKey = guestProgressKey,
+  mirrorToParent = false,
   children,
 }: {
   account: string | null;
+  username?: string;
   initial: Progress;
+  storageKey?: string;
+  mirrorToParent?: boolean;
   children: ReactNode;
 }) {
+  const parentRecord = useContext(Context)?.record;
   const [progress, setProgress] = useState(initial);
   const [ready, setReady] = useState(false);
   const [syncFailed, setSyncFailed] = useState(false);
@@ -71,7 +93,7 @@ export function ProgressProvider({
   const outbox = useRef<LearningEvent[]>([]);
   const syncing = useRef(false);
   const outboxKey = `orcas-academy-outbox-v1:${account}`;
-  const guestImportKey = `orcas-academy-guest-imported-v1:${account}`;
+  const guestImportKey = username ? guestProgressImportKey(username) : null;
 
   const publish = useCallback((next: Progress) => {
     current.current = next;
@@ -80,31 +102,28 @@ export function ProgressProvider({
 
   const retrySync = useCallback(async () => {
     if (!account || syncing.current) return;
-    const guest = progressSchema.safeParse(readStorage(guestKey));
-    const hasGuestProgress =
-      guest.success &&
-      [...Object.values(guest.data.lesson), ...Object.values(guest.data.puzzle), ...Object.values(guest.data.quiz)].some(
-        (item) => item.attempts || item.hints || item.completedAt !== null,
-      );
-    const needsGuestImport =
-      hasGuestProgress && localStorage.getItem(guestImportKey) !== "true";
-    if (!needsGuestImport && !outbox.current.length) return;
+    const snapshot = guestImportKey ? readStoredString(guestImportKey) : null;
+    const guest = progressSchema.safeParse(parseStorage(snapshot)).success
+      ? snapshot
+      : null;
+    if (!guest && !outbox.current.length) return;
     syncing.current = true;
     setSyncFailed(false);
     try {
-      if (needsGuestImport && guest.success) {
+      if (guest && guestImportKey) {
         const response = await fetch("/api/learn/import", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             "X-Learning-Player": account,
           },
-          body: JSON.stringify(guest.data),
+          body: guest,
         });
         if (!response.ok) throw new Error("Guest progress import failed.");
         const server = progressSchema.parse(await response.json());
-        localStorage.removeItem(guestKey);
-        localStorage.setItem(guestImportKey, "true");
+        if (readStoredString(guestProgressKey) === guest)
+          localStorage.removeItem(guestProgressKey);
+        localStorage.removeItem(guestImportKey);
         publish(server);
       }
       while (outbox.current.length) {
@@ -149,7 +168,7 @@ export function ProgressProvider({
         );
         void retrySync();
       } else {
-        const stored = progressSchema.safeParse(readStorage(guestKey));
+        const stored = progressSchema.safeParse(readStorage(storageKey));
         publish(stored.success ? stored.data : emptyProgress);
       }
       setReady(true);
@@ -157,7 +176,7 @@ export function ProgressProvider({
     return () => {
       active = false;
     };
-  }, [account, outboxKey, publish, retrySync]);
+  }, [account, outboxKey, publish, retrySync, storageKey]);
 
   useEffect(() => {
     window.addEventListener("online", retrySync);
@@ -174,10 +193,19 @@ export function ProgressProvider({
         writeStorage(outboxKey, outbox.current);
         void retrySync();
       } else {
-        writeStorage(guestKey, next);
+        writeStorage(storageKey, next);
       }
+      if (mirrorToParent) parentRecord?.(activity, details);
     },
-    [account, outboxKey, publish, retrySync],
+    [
+      account,
+      mirrorToParent,
+      outboxKey,
+      parentRecord,
+      publish,
+      retrySync,
+      storageKey,
+    ],
   );
 
   return (

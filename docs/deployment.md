@@ -1,4 +1,4 @@
-# Deploy Orcas vs Sharks on Vercel
+# Deploy GridLox Games on Vercel
 
 The application runs as Next.js Node.js functions on Vercel. PostgreSQL holds
 accounts, sessions, learning progress, matchmaking, game state, clocks, and

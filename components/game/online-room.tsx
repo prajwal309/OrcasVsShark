@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { GameHeader } from "@/components/navigation/game-header";
 import Game from "./game";
 import { ApiError, roomApi } from "@/lib/multiplayer/client";
 import type {
@@ -160,6 +161,7 @@ export function OnlineRoom({ code }: { code: string }) {
   if (!room)
     return (
       <div className="site-shell theme-ocean">
+        <GameHeader />
         <main className="main-content online-lobby">
           <h1>Room {code}</h1>
           <p role="status">{message}</p>

@@ -1,7 +1,8 @@
 # Learn to Play
 
-Open **Learn to Play** from the lobby. Start with the eight beginner lessons,
-then try a puzzle or play **Guided Practice** against the existing computer
+Open **Learn to Play** from the GridLox Games lobby to learn Orcas vs Sharks.
+Start with the eight beginner lessons, then try a puzzle or play
+**Guided Practice** against the existing computer
 opponent. Select a board theme at any time. The markers on the board identify
 exercise points, and filled dots mark legal destinations. Use the arrow keys
 to move board focus and Enter or Space to activate a point.
@@ -14,9 +15,19 @@ of two-move exercises survive refresh.
 
 Guest progress is stored in browser localStorage. Sign in to use your account
 progress, stored in PostgreSQL. The browser and account
-have independent progress histories. The account loads its saved progress when
-the Academy opens on another device. Pending account events retry safely after
-interruption, using a receipt for each event.
+have independent progress histories. To transfer saved guest progress, choose
+**Create account and keep progress** from a guest session. The account loads
+its saved progress when the Academy opens on another device. Pending account
+events retry safely after interruption, using a receipt for each event.
+
+## Daily Puzzle
+
+Open **Daily Puzzle** from the lobby to solve the current tactical challenge.
+**Show Solution** replays a solver-validated line on the board without counting
+as a solve. For rule questions, it reveals the correct answer and explanation
+without inventing a board move. Replay the line or retry the puzzle to submit
+your own answer. Successful solves show a brief celebration; reduced-motion
+settings disable the animation.
 
 ## Add an activity
 
