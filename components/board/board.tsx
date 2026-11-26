@@ -1,5 +1,5 @@
 "use client";
-import { useId, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
 import { COORDINATES, EDGES, NODES } from "@/lib/game/graph";
 import type { GameState, Move, NodeId } from "@/lib/game/types";
 import { ThemedPiece as Piece } from "./themed-piece";
@@ -13,6 +13,7 @@ export function Board({
   selected,
   moves,
   lastMove,
+  highlightLastMove = true,
   flipped,
   onNode,
   theme = "ocean",
@@ -26,6 +27,7 @@ export function Board({
   selected: NodeId | null;
   moves: Move[];
   lastMove?: Move;
+  highlightLastMove?: boolean;
   flipped: boolean;
   onNode: (node: NodeId) => void;
   theme?: BoardTheme;
@@ -78,6 +80,19 @@ export function Board({
     });
   }
   const effect = frame.effect;
+  useEffect(() => {
+    if (!effect) return;
+    const timer = window.setTimeout(
+      () =>
+        setFrame((current) =>
+          current.effect?.id === effect.id
+            ? { ...current, effect: null }
+            : current,
+        ),
+      700,
+    );
+    return () => window.clearTimeout(timer);
+  }, [effect]);
   const clearEffect = (id: number) =>
     setFrame((current) =>
       current.effect?.id === id ? { ...current, effect: null } : current,
@@ -279,6 +294,7 @@ export function Board({
           active = selected === node,
           marked = focusNodes.includes(node);
         const last =
+          highlightLastMove &&
           lastMove &&
           (lastMove.to === node ||
             (lastMove.kind !== "place" && lastMove.from === node));

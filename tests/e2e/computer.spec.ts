@@ -9,6 +9,10 @@ async function startComputer(
   await page
     .getByRole("button", { name: "Play against computer", exact: true })
     .click();
+  await expect(page.getByLabel("Your side").locator("option")).toHaveText([
+    "Sharks",
+    "Orcas",
+  ]);
   await page.getByLabel("Your side").selectOption(side);
   await page
     .getByRole("combobox", { name: "Difficulty", exact: true })
@@ -130,10 +134,10 @@ test("the online-first home also opens computer setup without signing in", async
 }) => {
   await page.goto("/");
   await expect(
-    page.getByRole("heading", { name: "Play online", exact: true }),
+    page.getByRole("heading", { name: "Play Online", exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Play against computer" }),
+    page.getByRole("heading", { name: "Play vs Computer", exact: true }),
   ).toBeVisible();
   await page.getByRole("link", { name: "Set up a computer game" }).click();
   await expect(page.getByRole("dialog")).toBeVisible();

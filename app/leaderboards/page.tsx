@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SiteFooter } from "@/components/navigation/site-footer";
 import { readIfAvailable } from "@/lib/database/connection";
 import { leaderboard } from "@/lib/multiplayer/ratings-store";
 import { rankedModes, timeControls } from "@/lib/multiplayer/ranking";
@@ -80,6 +81,7 @@ export default async function Leaderboards({
           )}
         </section>
       </main>
+      <SiteFooter />
     </div>
   );
 }

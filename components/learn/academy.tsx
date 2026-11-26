@@ -4,6 +4,7 @@ import Link from "next/link";
 import { GameHeader } from "@/components/navigation/game-header";
 import { useEffect, useState } from "react";
 import { AccountLink } from "@/components/navigation/account-navigation";
+import { SiteFooter } from "@/components/navigation/site-footer";
 import { Rules } from "@/components/game/rules";
 import {
   curriculum,
@@ -263,6 +264,7 @@ export function Academy({
           </>
         )}
       </main>
+      <SiteFooter />
     </div>
   );
 }

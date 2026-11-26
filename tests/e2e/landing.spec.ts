@@ -305,7 +305,7 @@ test("the official logo loads at the right size and links home from the header",
 
   await expect(header.locator(".header-inner")).toHaveCSS(
     "max-width",
-    "1440px",
+    "1230px",
   );
   const { height } = (await header.boundingBox())!;
   expect(height).toBeGreaterThanOrEqual(72);
@@ -517,7 +517,12 @@ test("the hero keeps play, learning, and support actions distinct", async ({
   const support = actions.getByRole("link", { name: "Support Baghchal" });
   await expect(playNow).toHaveCSS("background-color", "rgb(213, 165, 71)");
   await expect(support).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
-  await expect(support).toHaveCSS("border-top-color", "rgb(110, 76, 18)");
+  expect(
+    await support.evaluate((link) => {
+      const style = getComputedStyle(link);
+      return style.borderTopColor === style.color;
+    }),
+  ).toBe(true);
   if (page.viewportSize()!.width > 900) {
     const bounds = await Promise.all(
       [playNow, learn, support].map((link) => link.boundingBox()),

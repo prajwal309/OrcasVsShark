@@ -60,6 +60,20 @@ export function PuzzleNavigation({
           {statusText[status]}
         </span>
       </Link>
+      <Link
+        className="header-control header-feature"
+        href="/tigers-and-goats"
+        aria-label="Tigers & Goats"
+        aria-current={pathname === "/tigers-and-goats" ? "page" : undefined}
+        onClick={onNavigate}
+      >
+        <span className="header-puzzle-icon">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 4h16v16H4zM4 12h16M12 4v16M4 4l16 16M20 4 4 20" />
+          </svg>
+        </span>
+        Tigers &amp; Goats
+      </Link>
     </>
   );
 }

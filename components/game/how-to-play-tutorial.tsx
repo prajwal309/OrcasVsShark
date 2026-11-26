@@ -48,6 +48,7 @@ function TutorialBoard({
   const [demoIndex, setDemoIndex] = useState(0);
   const [demoPlaying, setDemoPlaying] = useState(true);
   const [practiceComplete, setPracticeComplete] = useState(false);
+  const [replayCount, setReplayCount] = useState(0);
   const [feedback, setFeedback] = useState(
     "Watch the example, then try the highlighted idea.",
   );
@@ -134,6 +135,7 @@ function TutorialBoard({
   }
 
   function replay() {
+    setReplayCount((count) => count + 1);
     setPosition(step.start);
     setSelected(null);
     setLastMove(undefined);
@@ -155,20 +157,22 @@ function TutorialBoard({
           : `${labels.sides[position.turn]} to play`}
       </p>
       <Board
+        key={replayCount}
         state={position}
         selected={selected}
         moves={legalMoves}
         lastMove={lastMove}
+        highlightLastMove={!practiceComplete}
         flipped={false}
         theme={theme}
         motionEnabled={motion}
         onNode={onNode}
-        focusNodes={step.focusNodes}
+        focusNodes={practiceComplete ? [] : step.focusNodes}
         guideMove={
           demoPlaying
             ? step.demoMoves[demoIndex]
             : practiceComplete
-              ? lastMove
+              ? undefined
               : step.demoMoves[0]
         }
       />

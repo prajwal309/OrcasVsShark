@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { GameHeader } from "@/components/navigation/game-header";
+import { SiteFooter } from "@/components/navigation/site-footer";
 import Game from "./game";
 import { ApiError, roomApi } from "@/lib/multiplayer/client";
 import type {
@@ -181,6 +182,7 @@ export function OnlineRoom({ code }: { code: string }) {
           <Link href={`/online?room=${code}`}>Online lobby and sign-in</Link>
           <Link href="/play">Play locally</Link>
         </main>
+        <SiteFooter />
       </div>
     );
 

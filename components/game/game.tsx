@@ -4,7 +4,7 @@ import { useEffect, useEffectEvent, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { GameHeader } from "@/components/navigation/game-header";
-import { GridLoxLogo } from "@/components/navigation/gridlox-logo";
+import { SiteFooter } from "@/components/navigation/site-footer";
 import { CapeCodCompass } from "@/components/board/cape-cod-background";
 import { Board } from "@/components/board/board";
 import { ThemedPieceIcon as PieceIcon } from "@/components/board/themed-piece";
@@ -787,19 +787,13 @@ export default function Game({
             </div>
           </aside>
         </div>
-        <footer>
-          <GridLoxLogo variant="footer" />
-          <p>
-            Orcas vs Sharks is inspired by <Link href="/learn">Baghchal</Link>,
-            the traditional strategy game of Nepal.
-          </p>
-          <span className="local-note">
-            {ranked
-              ? `RANKED · ${timeControls[ranked.mode].name.toUpperCase()}`
-              : `UNRATED · NO CLOCK · ${online ? "ONLINE PLAY" : "LOCAL PLAY"}`}
-          </span>
-        </footer>
+        <p className="local-note">
+          {ranked
+            ? `RANKED · ${timeControls[ranked.mode].name.toUpperCase()}`
+            : `UNRATED · NO CLOCK · ${online ? "ONLINE PLAY" : "LOCAL PLAY"}`}
+        </p>
       </main>
+      <SiteFooter />
       <div
         className="sr-only"
         role="status"
@@ -865,12 +859,8 @@ export default function Game({
                       setSetup({ ...setup, humanSide: e.target.value as Side })
                     }
                   >
-                    <option value="sharks">
-                      {labels.sides.sharks} · Place first
-                    </option>
-                    <option value="orcas">
-                      {labels.sides.orcas} · Capture {labels.sides.sharks}
-                    </option>
+                    <option value="sharks">{labels.sides.sharks}</option>
+                    <option value="orcas">{labels.sides.orcas}</option>
                   </select>
                 </label>
                 <label>

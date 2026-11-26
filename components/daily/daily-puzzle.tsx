@@ -6,6 +6,7 @@ import { ExercisePlayer } from "@/components/learn/exercise-player";
 import { ProgressProvider } from "@/components/learn/progress-provider";
 import { AccountLink } from "@/components/navigation/account-navigation";
 import { GameHeader } from "@/components/navigation/game-header";
+import { SiteFooter } from "@/components/navigation/site-footer";
 import { SiteThemeSelect } from "@/components/navigation/site-theme-select";
 import { emptyProgress } from "@/lib/learn/progress";
 import { applyDailyAction, type DailyAction } from "@/lib/daily/status";
@@ -174,6 +175,7 @@ export function DailyPuzzle({
           {syncMessage && <p role="status">{syncMessage}</p>}
         </div>
       </main>
+      <SiteFooter />
     </div>
   );
 }

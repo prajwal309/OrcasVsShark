@@ -6,7 +6,7 @@ The Cape Cod coastal background in `components/board/cape-cod-background.tsx` is
 
 | Item                                       | Origin                                                                                         | License/status                                         |
 | ------------------------------------------ | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| Orca and Shark SVG silhouettes             | Original paths in `components/board/piece.tsx`, created for this project                       | Project license pending owner decision                 |
+| Orca and Shark piece art                   | `public/icons/orca.webp`, `public/icons/shark.webp`, supplied by the project owner             | Project license pending owner decision                 |
 | Board geometry, surfaces, decorative marks | Original SVG/CSS; traditional topology independently reconstructed                             | Project license pending owner decision                 |
 | Move/capture sounds                        | Original sine-wave synthesis using Web Audio                                                   | Project license pending owner decision                 |
 | Typography                                 | Browser/system Arial, Helvetica, Georgia, Times New Roman fallbacks; no font files distributed | System-provided fonts                                  |

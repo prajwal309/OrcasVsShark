@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { SiteFooter } from "@/components/navigation/site-footer";
 import { usernameSchema } from "@/lib/auth/accounts";
 import { readIfAvailable } from "@/lib/database/connection";
 import { playerProfile } from "@/lib/multiplayer/ratings-store";
@@ -22,13 +23,16 @@ export default async function Player({
   if (player === null) notFound();
   if (!player) {
     return (
-      <main className="main-content ranked-page">
-        <Link className="ranked-text-link" href="/">
-          ← Ranked lobby
-        </Link>
-        <h1>Player profile</h1>
-        <p>Ranked player profiles are temporarily unavailable.</p>
-      </main>
+      <div className="site-shell theme-ocean">
+        <main className="main-content ranked-page">
+          <Link className="ranked-text-link" href="/">
+            ← Ranked lobby
+          </Link>
+          <h1>Player profile</h1>
+          <p>Ranked player profiles are temporarily unavailable.</p>
+        </main>
+        <SiteFooter />
+      </div>
     );
   }
 
@@ -122,6 +126,7 @@ export default async function Player({
           )}
         </section>
       </main>
+      <SiteFooter />
     </div>
   );
 }

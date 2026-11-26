@@ -577,6 +577,13 @@ h1 {
   stroke: transparent;
   stroke-width: 3;
 }
+.academy-focus-ring {
+  fill: none;
+  stroke: var(--board-accent);
+  stroke-width: 2.5;
+  stroke-dasharray: 4 5;
+  pointer-events: none;
+}
 .board-node:focus-visible .focus-ring {
   stroke: var(--board-accent);
 }
@@ -913,24 +920,6 @@ h1 {
 .tide-tip button span {
   margin-left: 13px;
 }
-footer {
-  border-top: 1px solid var(--hairline);
-  margin-top: 31px;
-  padding: 23px 0 28px;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 16px;
-  color: var(--muted);
-}
-footer p {
-  font-size: 10px;
-  margin: 0;
-}
-footer a {
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
 .site-footer {
   display: block;
   max-width: 1020px;
@@ -968,14 +957,20 @@ footer a {
   font-weight: 600;
   text-decoration: none;
 }
-.site-footer-links a:hover {
+.site-footer-links a:not(.site-footer-support):hover {
   text-decoration: underline;
 }
 .site-footer-links .site-footer-support {
   color: var(--accent);
+  min-height: 48px;
+  padding: 11px 20px;
+  border-radius: 8px;
+  font-size: 15px;
+  text-decoration: none;
 }
 .site-footer-links .site-footer-support:hover {
-  color: var(--text);
+  color: var(--accent);
+  text-decoration: none;
 }
 @media (max-width: 900px) {
   .site-footer {
@@ -995,7 +990,8 @@ footer a {
 .local-note {
   font-size: 7px;
   letter-spacing: 1.3px;
-  margin-left: auto;
+  margin: 20px 0 0;
+  text-align: right;
 }
 dialog {
   width: min(560px, calc(100% - 32px));
@@ -1703,15 +1699,6 @@ dialog > p,
   }
   .tide-tip {
     margin: 0 6px;
-  }
-  footer {
-    margin-top: 24px;
-    padding: 20px 0;
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  footer p {
-    line-height: 1.8;
   }
   .dialog-actions {
     flex-direction: column-reverse;
@@ -2434,6 +2421,17 @@ dialog > p,
 .lobby-support-cta:focus-visible .lobby-support-tooltip {
   opacity: 1;
   transform: translate(-50%, 0);
+}
+.site-footer-support .lobby-support-tooltip {
+  top: auto;
+  right: 0;
+  bottom: calc(100% + 8px);
+  left: auto;
+  transform: translateY(3px);
+}
+.site-footer-support:hover .lobby-support-tooltip,
+.site-footer-support:focus-visible .lobby-support-tooltip {
+  transform: translateY(0);
 }
 .lobby-board-preview {
   width: min(100%, 430px);

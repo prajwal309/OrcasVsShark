@@ -10,17 +10,28 @@ async function theme(page: Page, value: string) {
 const node = (page: Page, id: string) =>
   page.getByRole("button", { name: new RegExp(`^${id},`) });
 
+async function openTigersAndGoats(page: Page) {
+  const nav = page.getByRole("navigation", { name: "Main navigation" });
+  const menu = nav.getByRole("button", { name: "More navigation" });
+  if (await menu.isVisible()) await menu.click();
+  await nav.getByRole("link", { name: "Tigers & Goats" }).click();
+}
+
 test("opens Tigers and Goats from home and carries the theme into daily play", async ({
   page,
 }) => {
   await page.goto("/");
-  await page.getByRole("link", { name: "Play Tigers & Goats" }).click();
+  await openTigersAndGoats(page);
   await expect(page).toHaveURL("/tigers-and-goats");
   await expect(page).toHaveTitle(/Play Tigers and Goats \(Baghchal\)/);
   await expect(
     page.getByRole("heading", { name: "Tigers & Goats" }),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "a1, tiger" })).toBeVisible();
+  await expect(
+    page.locator('.game-board .board-pieces image[href="/icons/tiger.webp"]'),
+  ).toHaveCount(4);
+  expect((await page.request.get("/icons/tiger.webp")).ok()).toBe(true);
   await page.getByRole("button", { name: "c3, empty" }).click();
   await expect(page.getByRole("button", { name: "c3, goat" })).toBeVisible();
 
@@ -39,7 +50,7 @@ test("shows the Sand table artwork and restores it after reloading a themed game
     page.locator(".lobby-board-preview .sand-background"),
   ).toBeVisible();
 
-  await page.getByRole("link", { name: "Play Tigers & Goats" }).click();
+  await openTigersAndGoats(page);
   await expect(page.getByRole("button", { name: "a1, tiger" })).toBeVisible();
   await theme(page, "sand");
   await expect(page.locator(".game-board .sand-background")).toBeVisible();
@@ -90,6 +101,9 @@ test("switches themes during a game, persists the choice, and plays by keyboard"
   await expect(node(page, "a2")).toHaveAttribute("aria-label", "a2, tiger");
   await theme(page, "sand");
   await expect(node(page, "a2")).toHaveAttribute("aria-label", "a2, orca");
+  await expect(
+    page.locator('.game-board .board-pieces image[href="/icons/tiger.webp"]'),
+  ).toHaveCount(0);
   await expect(page.getByText("2 PLIES", { exact: true })).toBeVisible();
   expect(
     await page.evaluate(
@@ -107,9 +121,10 @@ test("computer side selection and responses follow the Tiger and Goat theme", as
   await page
     .getByRole("button", { name: "Play against computer", exact: true })
     .click();
-  await expect(
-    page.getByRole("option", { name: "Goats · Place first" }),
-  ).toHaveCount(1);
+  await expect(page.getByLabel("Your side").locator("option")).toHaveText([
+    "Goats",
+    "Tigers",
+  ]);
   await page
     .getByRole("combobox", { name: "Difficulty", exact: true })
     .selectOption("easy");

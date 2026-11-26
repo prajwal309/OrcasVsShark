@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { GridLoxLogo } from "./gridlox-logo";
+import { SupportBaghchalLink } from "./support-baghchal-link";
 
 export function SiteFooter() {
   return (
@@ -12,9 +13,7 @@ export function SiteFooter() {
         <nav className="site-footer-links" aria-label="Footer">
           <Link href="/about">About</Link>
           <Link href="/about#project">The Project</Link>
-          <Link className="site-footer-support" href="/support">
-            Support Baghchal
-          </Link>
+          <SupportBaghchalLink className="site-footer-support" />
           <Link href="/about#contact">Contact &amp; Feedback</Link>
         </nav>
       </div>

@@ -185,14 +185,6 @@
   font-weight: 700;
 }
 
-.academy-focus-ring {
-  fill: none;
-  stroke: var(--board-accent);
-  stroke-width: 2.5;
-  stroke-dasharray: 4 5;
-  pointer-events: none;
-}
-
 .academy-instructions {
   min-width: 0;
 }
