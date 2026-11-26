@@ -254,7 +254,7 @@ export function ExercisePlayer({
         seconds: 0,
       });
       setSelected(null);
-      setMessage("Good opening. The defender replied. Find the winning move.");
+      setMessage("Your opponent replied. Find the winning move.");
       setReview(false);
       return;
     }
@@ -340,7 +340,10 @@ export function ExercisePlayer({
           <p className="academy-objective">{text(exercise.objective)}</p>
           {reply && !completion && (
             <p>
-              Defender’s reply <strong>{formatMove(reply)}</strong>
+              {exercise.side === "orcas"
+                ? "Defender’s reply"
+                : "Hunter’s reply"}{" "}
+              <strong>{formatMove(reply)}</strong>
             </p>
           )}
           {goal.kind === "choice" && !completion && (

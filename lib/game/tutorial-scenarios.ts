@@ -111,7 +111,7 @@ const orcaVictory = puzzleScenario(
   "Win with five captures",
   "Orcas win by capturing five Sharks. The captured pieces leave the board.",
   "Find the winning fifth capture.",
-  "That is the fifth capture. The engine confirms an Orcas victory.",
+  "That is the fifth capture. Orcas win.",
   "Choose a legal capture that reaches five captured Sharks.",
 );
 if (orcaVictory.start.sharksCaptured !== 4)

@@ -2,6 +2,7 @@
 
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { GameHeader } from "@/components/navigation/game-header";
 import { GridLoxLogo } from "@/components/navigation/gridlox-logo";
 import { CapeCodCompass } from "@/components/board/cape-cod-background";
@@ -10,6 +11,7 @@ import { ThemedPieceIcon as PieceIcon } from "@/components/board/themed-piece";
 import {
   themeLabels,
   themeResultReason,
+  type BoardTheme,
 } from "@/lib/presentation/board-themes";
 import { createInitialState } from "@/lib/game/initial-state";
 import { applyMove } from "@/lib/game/apply-move";
@@ -51,10 +53,13 @@ const SAVE_KEY = "orcas-sharks.local.v1";
 export default function Game({
   online,
   openComputerSetup = false,
+  initialTheme,
 }: {
   online?: OnlineController;
   openComputerSetup?: boolean;
+  initialTheme?: BoardTheme;
 }) {
+  const router = useRouter();
   const [localSession, setSession] = useState<Session>(() => fresh());
   const session: Session = online
     ? {
@@ -68,7 +73,10 @@ export default function Game({
   const [selected, setSelected] = useState<NodeId | null>(null);
   const [flipped, setFlipped] = useState(false);
   const [ready, setReady] = useState(false);
-  const [settings, setSettings] = useState(defaultGameSettings);
+  const [settings, setSettings] = useState(() => ({
+    ...defaultGameSettings,
+    theme: initialTheme ?? defaultGameSettings.theme,
+  }));
   const [modal, setModal] = useState<
     "rules" | "settings" | "restart" | "resign" | "draw" | "computer" | null
   >(openComputerSetup ? "computer" : null);
@@ -79,10 +87,9 @@ export default function Game({
   const [setupOpponent, setSetupOpponent] = useState<"computer" | "friend">(
     "computer",
   );
+  const opponentSelect = useRef<HTMLSelectElement>(null);
   const [announcement, setAnnouncement] = useState(
-    online
-      ? "Online game connected."
-      : "Sharks move first. Place a Shark on an empty point.",
+    online ? "Online game connected." : "",
   );
   const [storageMessage, setStorageMessage] = useState("Saved on this device");
   const audio = useRef<AudioContext | null>(null);
@@ -166,12 +173,13 @@ export default function Game({
       } catch {
         setStorageMessage("Saved game unavailable · started a new game");
       }
-      const saved = readGameSettings();
+      const saved = readGameSettings(initialTheme);
+      const { sides, defender } = themeLabels(saved.theme);
       setSettings(saved);
-      setAnnouncement((message) =>
-        message === "Sharks move first. Place a Shark on an empty point."
-          ? `${themeLabels(saved.theme).sides.sharks} move first. Place a ${themeLabels(saved.theme).defender} on an empty point.`
-          : message,
+      setAnnouncement(
+        (message) =>
+          message ||
+          `${sides.sharks} move first. Place a ${defender} on an empty point.`,
       );
       setReady(true);
     }, 0);
@@ -179,7 +187,7 @@ export default function Game({
       window.clearTimeout(timer);
       void audio.current?.close();
     };
-  }, [isOnline]);
+  }, [initialTheme, isOnline]);
 
   useEffect(() => {
     if (!ready) return;
@@ -195,13 +203,29 @@ export default function Game({
               computer: localSession.computer,
             }),
           );
-        saveGameSettings(settings);
+        saveGameSettings(settings, initialTheme);
       } catch {
         setStorageMessage("Storage unavailable · keep this tab open");
       }
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [localSession, state, settings, ready, isOnline]);
+  }, [localSession, state, settings, ready, isOnline, initialTheme]);
+
+  useEffect(() => {
+    if (modal === "computer") opponentSelect.current?.focus();
+  }, [modal]);
+
+  function openGameSetup() {
+    if (online) {
+      setModal(null);
+      router.push("/play?opponent=computer");
+      return;
+    }
+
+    setSetup(computer ?? { humanSide: "sharks", difficulty: "medium" });
+    setSetupOpponent("computer");
+    setModal("computer");
+  }
 
   function sound(capture: boolean) {
     if (!settings.sound) return;
@@ -371,7 +395,11 @@ export default function Game({
               <span className="status-dot" /> THE{" "}
               {labels.landscape.toUpperCase()} IS YOUR ARENA
             </p>
-            <h1>Instinct meets strategy.</h1>
+            <h1>
+              {initialTheme === "tigers-goats"
+                ? "Tigers & Goats"
+                : "Instinct meets strategy."}
+            </h1>
             <p className="intro">
               Four {labels.sides.orcas}. Twenty {labels.sides.sharks}.{" "}
               {settings.theme === "tigers-goats"
@@ -404,13 +432,7 @@ export default function Game({
             <button
               className="computer-entry"
               disabled={!ready}
-              onClick={() => {
-                setSetup(
-                  computer ?? { humanSide: "sharks", difficulty: "medium" },
-                );
-                setSetupOpponent("computer");
-                setModal("computer");
-              }}
+              onClick={openGameSetup}
             >
               {computer ? "Computer game setup" : "Play against computer"}
             </button>
@@ -563,9 +585,9 @@ export default function Game({
                 <span>{labels.caption}</span>
                 {settings.theme === "tigers-goats" ? (
                   <span>01 — CLASSIC</span>
-                ) : (
+                ) : settings.theme === "ocean" ? (
                   <CapeCodCompass />
-                )}
+                ) : null}
               </div>
             </div>
             <div
@@ -808,6 +830,7 @@ export default function Game({
         {modal === "rules" ? (
           <HowToPlayTutorial
             onStartPlaying={() => setModal(null)}
+            onOpenSetup={openGameSetup}
             online={isOnline}
             computer={!!computer}
             theme={settings.theme}
@@ -822,6 +845,7 @@ export default function Game({
             <label>
               Opponent
               <select
+                ref={opponentSelect}
                 value={setupOpponent}
                 onChange={(e) =>
                   setSetupOpponent(e.target.value as "computer" | "friend")

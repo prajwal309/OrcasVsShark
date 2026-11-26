@@ -4,10 +4,17 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ExercisePlayer } from "@/components/learn/exercise-player";
 import { ProgressProvider } from "@/components/learn/progress-provider";
+import { AccountLink } from "@/components/navigation/account-navigation";
+import { GameHeader } from "@/components/navigation/game-header";
+import { SiteThemeSelect } from "@/components/navigation/site-theme-select";
 import { emptyProgress } from "@/lib/learn/progress";
 import { applyDailyAction, type DailyAction } from "@/lib/daily/status";
+import type { DailyDifficulty } from "@/lib/daily/puzzles";
 import type { Puzzle } from "@/lib/learn/exercises";
-import type { BoardTheme } from "@/lib/presentation/board-themes";
+import {
+  defaultGameSettings,
+  readGameSettings,
+} from "@/lib/presentation/game-settings";
 import { useDailyDate, useDailyProgress } from "./daily-status";
 
 export function DailyPuzzle({
@@ -15,16 +22,17 @@ export function DailyPuzzle({
   puzzle,
   registered,
   followToday,
-  theme,
+  difficulty,
 }: {
   date: string;
   puzzle: Puzzle;
   registered: boolean;
   followToday: boolean;
-  theme: BoardTheme;
+  difficulty: DailyDifficulty;
 }) {
   const router = useRouter();
   const today = useDailyDate();
+  const [settings, setSettings] = useState(defaultGameSettings);
   const daily = useDailyProgress(date, !followToday && date !== today);
   const pending = useRef(Promise.resolve());
   const sequence = useRef(0);
@@ -39,6 +47,10 @@ export function DailyPuzzle({
   const successRate = summary?.attempted
     ? Math.round((summary.solved / summary.attempted) * 100)
     : 0;
+
+  useEffect(() => {
+    queueMicrotask(() => setSettings(readGameSettings()));
+  }, []);
 
   useEffect(() => {
     if (followToday && date !== today) router.refresh();
@@ -105,43 +117,63 @@ export function DailyPuzzle({
   };
 
   return (
-    <div className="daily-puzzle-content">
-      {registered && (
-        <section
-          className="turn-card daily-stats"
-          aria-label="Puzzle statistics"
-        >
-          <h2>Your puzzle progress</h2>
-          {summary ? (
+    <div
+      className={`site-shell theme-${settings.theme} ${settings.motion ? "" : "no-motion"}`}
+    >
+      <GameHeader account={<AccountLink />} onSettingsUpdate={setSettings} />
+      <main className="main-content">
+        <div className="lobby-intro">
+          <div>
+            <p className="eyebrow">DAILY TACTICS</p>
+            <h1>Daily Puzzle</h1>
             <p>
-              {summary.solved} of {summary.attempted} days solved ·{" "}
-              {successRate}% success rate · {summary.attempts} attempts ·{" "}
-              {summary.streak}-day streak
+              {date === today ? "Today’s puzzle" : `Puzzle from ${date}`} ·{" "}
+              {difficulty}
             </p>
-          ) : statsUnavailable ? (
-            <p role="status">Your account puzzle statistics are unavailable.</p>
-          ) : (
-            <p>Loading account statistics…</p>
+          </div>
+          <SiteThemeSelect />
+        </div>
+        <div className="daily-puzzle-content">
+          {registered && (
+            <section
+              className="turn-card daily-stats"
+              aria-label="Puzzle statistics"
+            >
+              <h2>Your puzzle progress</h2>
+              {summary ? (
+                <p>
+                  {summary.solved} of {summary.attempted} days solved ·{" "}
+                  {successRate}% success rate · {summary.attempts} attempts ·{" "}
+                  {summary.streak}-day streak
+                </p>
+              ) : statsUnavailable ? (
+                <p role="status">
+                  Your account puzzle statistics are unavailable.
+                </p>
+              ) : (
+                <p>Loading account statistics…</p>
+              )}
+            </section>
           )}
-        </section>
-      )}
-      <ProgressProvider
-        key={daily.key}
-        account={null}
-        initial={emptyProgress}
-        storageKey={`${daily.key}:round`}
-        mirrorToParent={daily.progress.status !== "revealed"}
-      >
-        <ExercisePlayer
-          exercise={activityPuzzle}
-          kind="puzzle"
-          theme={theme}
-          dailyPuzzleMode
-          dailyPractice={daily.progress.status === "revealed"}
-          onPuzzleAttempt={recordAttempt}
-        />
-      </ProgressProvider>
-      {syncMessage && <p role="status">{syncMessage}</p>}
+          <ProgressProvider
+            key={daily.key}
+            account={null}
+            initial={emptyProgress}
+            storageKey={`${daily.key}:round`}
+            mirrorToParent={daily.progress.status !== "revealed"}
+          >
+            <ExercisePlayer
+              exercise={activityPuzzle}
+              kind="puzzle"
+              theme={settings.theme}
+              dailyPuzzleMode
+              dailyPractice={daily.progress.status === "revealed"}
+              onPuzzleAttempt={recordAttempt}
+            />
+          </ProgressProvider>
+          {syncMessage && <p role="status">{syncMessage}</p>}
+        </div>
+      </main>
     </div>
   );
 }

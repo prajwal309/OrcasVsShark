@@ -1162,6 +1162,10 @@ dialog > p,
 .tutorial-navigation button:last-child {
   color: var(--muted);
 }
+.tutorial-navigation button.primary-button {
+  color: var(--action-text);
+  background: var(--action);
+}
 .tutorial-start {
   width: 100%;
   margin-top: 12px;
@@ -1249,8 +1253,15 @@ dialog > p,
 }
 /* Board presets color the table and its highlights independently of the site. */
 .theme-sand {
-  --board: #494234;
-  --board-line: #ded5a7;
+  --board: #533a29;
+}
+.game-board[data-board-theme="sand"] {
+  --board-line: #f4dfb9;
+  --board-accent: #fff1bd;
+}
+.game-board[data-board-theme="sand"] .board-line {
+  stroke: var(--board-line);
+  filter: drop-shadow(0 1px 1px #4c301e);
 }
 .theme-tigers-goats {
   --board: #2a3d2e;

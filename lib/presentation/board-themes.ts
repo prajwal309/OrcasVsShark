@@ -20,8 +20,10 @@ export function themeLabels(theme: BoardTheme = "ocean") {
     defender: forest ? "Goat" : "Shark",
     caption: forest
       ? "FOREST TABLE · TIGERS & GOATS"
-      : "CAPE COD · MASSACHUSETTS",
-    landscape: forest ? "forest" : "ocean",
+      : theme === "sand"
+        ? "SAND TABLE"
+        : "CAPE COD · MASSACHUSETTS",
+    landscape: forest ? "forest" : theme === "sand" ? "shore" : "ocean",
   };
 }
 

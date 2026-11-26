@@ -116,9 +116,9 @@ export function Academy({
       : undefined;
   const next =
     exercise &&
-    curriculum[kind][
-      curriculum[kind].findIndex(({ id }) => id === exercise.id) + 1
-    ];
+    curriculum[kind].find(
+      (_, index, activities) => activities[index - 1]?.id === exercise.id,
+    );
   const active = progress.current;
   const resume =
     active && progress[active.kind][active.activityId]?.completedAt == null

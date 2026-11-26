@@ -10,6 +10,48 @@ async function theme(page: Page, value: string) {
 const node = (page: Page, id: string) =>
   page.getByRole("button", { name: new RegExp(`^${id},`) });
 
+test("opens Tigers and Goats from home and carries the theme into daily play", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("link", { name: "Play Tigers & Goats" }).click();
+  await expect(page).toHaveURL("/tigers-and-goats");
+  await expect(page).toHaveTitle(/Play Tigers and Goats \(Bagh Chal\)/);
+  await expect(
+    page.getByRole("heading", { name: "Tigers & Goats" }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "a1, tiger" })).toBeVisible();
+  await page.getByRole("button", { name: "c3, empty" }).click();
+  await expect(page.getByRole("button", { name: "c3, goat" })).toBeVisible();
+
+  await page.goto("/daily-puzzle");
+  await expect(page.locator(".site-shell")).toHaveClass(/theme-tigers-goats/);
+  await theme(page, "ocean");
+  await expect(page.locator(".site-shell")).toHaveClass(/theme-ocean/);
+});
+
+test("shows the Sand table artwork and restores it after reloading a themed game", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await theme(page, "sand");
+  await expect(
+    page.locator(".lobby-board-preview .sand-background"),
+  ).toBeVisible();
+
+  await page.getByRole("link", { name: "Play Tigers & Goats" }).click();
+  await expect(page.getByRole("button", { name: "a1, tiger" })).toBeVisible();
+  await theme(page, "sand");
+  await expect(page.locator(".game-board .sand-background")).toBeVisible();
+  await expect(page.getByText("SAND TABLE", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "a1, orca" })).toBeVisible();
+  await page.reload();
+  await expect(page.locator(".game-board .sand-background")).toBeVisible();
+
+  await page.goto("/daily-puzzle");
+  await expect(page.locator(".game-board .sand-background")).toBeVisible();
+});
+
 test("switches themes during a game, persists the choice, and plays by keyboard", async ({
   page,
 }) => {
@@ -31,6 +73,11 @@ test("switches themes during a game, persists the choice, and plays by keyboard"
   await page.keyboard.press("Enter");
   await expect(node(page, "a2")).toHaveAttribute("aria-label", "a2, tiger");
   await page.getByRole("button", { name: "How to play" }).click();
+  const tutorial = page.getByRole("dialog", { name: "How to Play" });
+  await expect(
+    tutorial.getByRole("heading", { name: "Goats place first" }),
+  ).toBeVisible();
+  await tutorial.getByText("Quick Rules", { exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Goats surround" }),
   ).toBeVisible();

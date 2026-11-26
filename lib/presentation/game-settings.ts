@@ -13,7 +13,8 @@ export const defaultGameSettings: GameSettings = {
 
 const settingsKey = "orcas-sharks.settings.v1";
 
-export function readGameSettings(): GameSettings {
+export function readGameSettings(initialTheme?: BoardTheme): GameSettings {
+  let settings = defaultGameSettings;
   try {
     const saved = JSON.parse(localStorage.getItem(settingsKey) ?? "null");
     if (
@@ -22,14 +23,35 @@ export function readGameSettings(): GameSettings {
       typeof saved.motion === "boolean" &&
       isBoardTheme(saved.theme)
     ) {
-      return { sound: saved.sound, motion: saved.motion, theme: saved.theme };
+      settings = {
+        sound: saved.sound,
+        motion: saved.motion,
+        theme: saved.theme,
+      };
     }
   } catch {
     // Defaults are available if browser storage is disabled.
   }
-  return defaultGameSettings;
+  if (!initialTheme) return settings;
+
+  let theme = initialTheme;
+  try {
+    const saved = localStorage.getItem(`${settingsKey}.theme.${initialTheme}`);
+    if (isBoardTheme(saved)) theme = saved;
+  } catch {
+    // Use the page's starting theme if storage is disabled.
+  }
+  return { ...settings, theme };
 }
 
-export function saveGameSettings(settings: GameSettings) {
+export function saveGameSettings(
+  settings: GameSettings,
+  initialTheme?: BoardTheme,
+) {
   localStorage.setItem(settingsKey, JSON.stringify(settings));
+  if (initialTheme)
+    localStorage.setItem(
+      `${settingsKey}.theme.${initialTheme}`,
+      settings.theme,
+    );
 }

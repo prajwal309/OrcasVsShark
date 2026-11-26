@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { curriculum, getExercise, type ActivityKind } from "./curriculum";
+import {
+  curriculum,
+  getExercise,
+  trackedPuzzles,
+  type ActivityKind,
+} from "./curriculum";
 import { acceptedAnswer } from "./exercises";
 
 const activity = z.object({
@@ -124,7 +129,7 @@ export function summarize(progress: Progress) {
   const lessons = curriculum.lesson.filter(
     ({ id }) => progress.lesson[id]?.completedAt != null,
   );
-  const puzzles = curriculum.puzzle.filter(
+  const puzzles = trackedPuzzles.filter(
     ({ id }) => progress.puzzle[id]?.completedAt != null,
   );
   const categories = new Map<
@@ -133,7 +138,7 @@ export function summarize(progress: Progress) {
   >();
   let attempts = 0;
   let successes = 0;
-  for (const puzzle of curriculum.puzzle) {
+  for (const puzzle of trackedPuzzles) {
     const item = progress.puzzle[puzzle.id];
     if (!item?.attempts) continue;
     const group = categories.get(puzzle.category) ?? {
@@ -190,10 +195,12 @@ export function summarize(progress: Progress) {
   ];
   const recent = (Object.keys(curriculum) as ActivityKind[])
     .flatMap((kind) =>
-      curriculum[kind].flatMap((exercise) => {
-        const at = progress[kind][exercise.id]?.completedAt;
-        return at != null ? [{ kind, exercise, at }] : [];
-      }),
+      (kind === "puzzle" ? trackedPuzzles : curriculum[kind]).flatMap(
+        (exercise) => {
+          const at = progress[kind][exercise.id]?.completedAt;
+          return at != null ? [{ kind, exercise, at }] : [];
+        },
+      ),
     )
     .sort((a, b) => b.at - a.at)
     .slice(0, 5);

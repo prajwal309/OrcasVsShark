@@ -152,6 +152,10 @@ export function GameHeader({
               setDialog(null);
               if (pathname !== "/play") router.push("/play");
             }}
+            onOpenSetup={() => {
+              setDialog(null);
+              router.push("/play?opponent=computer");
+            }}
           />
         )}
         {dialog === "settings" && (

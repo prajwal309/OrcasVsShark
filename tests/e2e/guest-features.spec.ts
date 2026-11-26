@@ -51,18 +51,6 @@ async function dailyLink(page: Page) {
   return nav.getByRole("link", { name: "Daily Puzzle", exact: true });
 }
 
-function dateForDailyPuzzle(id: string) {
-  const date = new Date(`${utcDateString()}T00:00:00.000Z`);
-  for (let offset = 0; offset < 30; offset++) {
-    const candidate = new Date(date);
-    candidate.setUTCDate(candidate.getUTCDate() - offset);
-    const candidateDate = utcDateString(candidate);
-    if (dailyPuzzleForDate(candidateDate).id.endsWith(`-${id}`))
-      return candidateDate;
-  }
-  throw new Error(`No recent daily puzzle found for ${id}.`);
-}
-
 test("daily solution replay can be retried without counting as solved", async ({
   page,
 }) => {
@@ -97,12 +85,10 @@ test("daily solution replay can be retried without counting as solved", async ({
   );
 });
 
-test("daily non-move puzzle reveals its correct answer without a false board move", async ({
+test("an archived non-move puzzle reveals its correct answer without a false board move", async ({
   page,
 }) => {
-  await page.goto(
-    `/daily-puzzle?date=${dateForDailyPuzzle("occupied-landing")}`,
-  );
+  await page.goto("/daily-puzzle?date=2026-11-14");
   await page.getByRole("button", { name: "Show Solution" }).click();
 
   await expect(page.getByText("Answer: The capture is illegal")).toBeVisible();
@@ -265,6 +251,9 @@ test("today's badge clears on an attempt, records a hinted solve, and resets at 
     "Solved with hints",
   );
   await page.getByRole("link", { name: "GridLox Games home" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Orcas vs Sharks", exact: true }),
+  ).toBeVisible();
   await expect(await dailyLink(page)).toHaveAccessibleDescription(
     "Solved with hints",
   );

@@ -1,8 +1,9 @@
 import { utcDateString } from "./status";
+import { dailyPuzzles } from "./puzzle-data";
 import { puzzles } from "@/lib/learn/puzzle-data";
 import { prepareExercise, type Puzzle } from "@/lib/learn/exercises";
 
-const dailyPuzzleIds = [
+const previousPuzzleIds = [
   "opening-jump",
   "close-the-landing",
   "quiet-opening",
@@ -17,12 +18,15 @@ const dailyPuzzleIds = [
   "occupied-landing",
 ] as const;
 
-const dailyPuzzles = dailyPuzzleIds.map((id) => {
+const previousPuzzles = previousPuzzleIds.map((id) => {
   const puzzle = puzzles.find((candidate) => candidate.id === id);
   if (!puzzle) throw new Error(`Unknown daily puzzle: ${id}`);
-  prepareExercise(puzzle);
   return puzzle;
 });
+
+// Keep archived boards and saved attempts tied to their original dates.
+const rotationStart = Date.UTC(2026, 10, 26);
+const dayMs = 86_400_000;
 
 export type DailyDifficulty = "Easy" | "Medium" | "Hard";
 
@@ -46,12 +50,16 @@ export function dailyPuzzleForDate(date: string): Puzzle {
   )
     throw new Error("Choose a valid daily puzzle date.");
 
-  const day = Math.floor(timestamp / 86_400_000);
-  const index =
-    ((day % dailyPuzzles.length) + dailyPuzzles.length) % dailyPuzzles.length;
+  const [pool, day] =
+    timestamp >= rotationStart
+      ? [dailyPuzzles, (timestamp - rotationStart) / dayMs]
+      : [previousPuzzles, timestamp / dayMs];
+  const index = ((day % pool.length) + pool.length) % pool.length;
+  const puzzle = pool[index];
+  prepareExercise(puzzle);
   return {
-    ...dailyPuzzles[index],
-    id: `daily-${date}-${dailyPuzzles[index].id}`,
+    ...puzzle,
+    id: `daily-${date}-${puzzle.id}`,
   };
 }
 

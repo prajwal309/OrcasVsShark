@@ -328,6 +328,12 @@ export function OnlineLobby({
                 <Link className="lobby-secondary-button" href="/learn">
                   Learn to Play
                 </Link>
+                <Link
+                  className="lobby-secondary-button"
+                  href="/tigers-and-goats"
+                >
+                  Play Tigers &amp; Goats
+                </Link>
               </div>
             </div>
             <div className={`lobby-board-preview theme-${previewTheme}`}>

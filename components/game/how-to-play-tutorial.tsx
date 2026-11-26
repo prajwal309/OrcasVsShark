@@ -17,6 +17,18 @@ import {
 import { themeLabels, type BoardTheme } from "@/lib/presentation/board-themes";
 import { Rules } from "./rules";
 
+function tutorialText(text: string, theme: BoardTheme) {
+  if (theme !== "tigers-goats") return text;
+  const { sides, hunter, defender } = themeLabels(theme);
+  return text
+    .replace(/\bAn Orca\b/g, `A ${hunter}`)
+    .replace(/\ban Orca\b/g, `a ${hunter}`)
+    .replace(/\bOrcas\b/g, sides.orcas)
+    .replace(/\bSharks\b/g, sides.sharks)
+    .replace(/\bOrca\b/g, hunter)
+    .replace(/\bShark\b/g, defender);
+}
+
 function TutorialBoard({
   step,
   theme,
@@ -161,7 +173,7 @@ function TutorialBoard({
         }
       />
       <div className="tutorial-board-status" role="status" aria-live="polite">
-        <strong>{feedback}</strong>
+        <strong>{tutorialText(feedback, theme)}</strong>
       </div>
       <button
         className="tutorial-replay"
@@ -180,23 +192,26 @@ export function HowToPlayTutorial({
   online = false,
   computer = false,
   onStartPlaying,
+  onOpenSetup,
 }: {
   theme: BoardTheme;
   motion: boolean;
   online?: boolean;
   computer?: boolean;
   onStartPlaying: () => void;
+  onOpenSetup: () => void;
 }) {
   const [stepIndex, setStepIndex] = useState(0);
   const [stepComplete, setStepComplete] = useState(false);
-  const [tutorialComplete, setTutorialComplete] = useState(false);
+  const [skipped, setSkipped] = useState(false);
   const step = tutorialSteps[stepIndex];
   const lastStep = stepIndex === tutorialSteps.length - 1;
+  const finished = lastStep && stepComplete;
 
   function changeStep(index: number) {
     setStepIndex(index);
     setStepComplete(false);
-    setTutorialComplete(false);
+    setSkipped(false);
   }
 
   return (
@@ -207,13 +222,10 @@ export function HowToPlayTutorial({
           step={step}
           theme={theme}
           motion={motion}
-          onSolved={() => {
-            setStepComplete(true);
-            if (lastStep) setTutorialComplete(true);
-          }}
+          onSolved={() => setStepComplete(true)}
           onReset={() => {
             setStepComplete(false);
-            setTutorialComplete(false);
+            setSkipped(false);
           }}
         />
         <aside className="tutorial-instructions">
@@ -227,9 +239,11 @@ export function HowToPlayTutorial({
               value={stepIndex + 1}
             />
           </label>
-          <h3>{step.title}</h3>
-          <p>{step.instruction}</p>
-          <p className="tutorial-objective">{step.objective}</p>
+          <h3>{tutorialText(step.title, theme)}</h3>
+          <p>{tutorialText(step.instruction, theme)}</p>
+          <p className="tutorial-objective">
+            {tutorialText(step.objective, theme)}
+          </p>
           {stepComplete && (
             <p className="tutorial-complete">
               {lastStep
@@ -245,16 +259,15 @@ export function HowToPlayTutorial({
               Previous
             </button>
             <button
-              disabled={lastStep}
-              onClick={() => changeStep(stepIndex + 1)}
+              className={finished ? "primary-button" : undefined}
+              disabled={lastStep && !finished}
+              onClick={finished ? onOpenSetup : () => changeStep(stepIndex + 1)}
             >
-              Next
+              {finished ? "Let’s Play!" : "Next"}
             </button>
-            <button onClick={() => setTutorialComplete(true)}>
-              Skip Tutorial
-            </button>
+            <button onClick={() => setSkipped(true)}>Skip Tutorial</button>
           </div>
-          {tutorialComplete && (
+          {skipped && (
             <button
               className="primary-button tutorial-start"
               onClick={onStartPlaying}

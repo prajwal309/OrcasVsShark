@@ -175,6 +175,48 @@ test("the tutorial allows board practice and can be skipped into play", async ({
   await expect(page).toHaveURL("/play");
 });
 
+test("finishing the tutorial replaces Next with Let’s Play and opens game setup", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  for (const path of ["/", "/play"]) {
+    await page.goto(path);
+    await page.getByRole("button", { name: "How to Play" }).click();
+
+    const tutorial = page.getByRole("dialog", { name: "How to Play" });
+    const next = tutorial.getByRole("button", { name: "Next", exact: true });
+    const letsPlay = tutorial.getByRole("button", { name: "Let’s Play!" });
+    for (let lesson = 1; lesson < 6; lesson++) await next.click();
+    await expect(tutorial.getByText("Lesson 6 of 6")).toBeVisible();
+    await expect(next).toBeDisabled();
+    await expect(letsPlay).toHaveCount(0);
+
+    const board = tutorial.getByRole("region", { name: "Tutorial board" });
+    await expect(
+      board.getByRole("button", { name: "Replay Animation" }),
+    ).toBeEnabled();
+    await board
+      .getByRole("button", { name: /marked for the exercise/ })
+      .click();
+    await expect(
+      tutorial.getByText("Tutorial complete. You are ready to play."),
+    ).toBeVisible();
+    await expect(next).toHaveCount(0);
+    await expect(
+      tutorial.getByRole("button", { name: "Previous" }),
+    ).toBeEnabled();
+    await letsPlay.click();
+
+    const setup = page.getByRole("dialog", { name: "Choose your opponent" });
+    await expect(setup).toBeVisible();
+    await expect(tutorial).toBeHidden();
+    await expect(setup.getByLabel("Opponent")).toBeFocused();
+    await expect(
+      setup.getByRole("button", { name: "Start game" }),
+    ).toBeVisible();
+  }
+});
+
 test("the landing gear changes the preferences used on the game board", async ({
   page,
 }) => {

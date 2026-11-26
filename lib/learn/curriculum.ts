@@ -1,6 +1,7 @@
 import { lessons } from "./lesson-data";
 import { puzzles } from "./puzzle-data";
 import type { Exercise } from "./exercises";
+import { dailyPuzzles } from "@/lib/daily/puzzle-data";
 
 type Question = readonly [
   id: string,
@@ -81,12 +82,12 @@ export const curriculum = {
   quiz: quizzes,
 } as const;
 export type ActivityKind = keyof typeof curriculum;
+export const trackedPuzzles = [...puzzles, ...dailyPuzzles];
 
 export function getExercise(
   kind: ActivityKind,
   id: string,
 ): Exercise | undefined {
-  return (curriculum[kind] as readonly Exercise[]).find(
-    (exercise) => exercise.id === id,
-  );
+  const exercises = kind === "puzzle" ? trackedPuzzles : curriculum[kind];
+  return exercises.find((exercise) => exercise.id === id);
 }

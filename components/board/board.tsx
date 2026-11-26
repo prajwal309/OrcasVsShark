@@ -5,6 +5,7 @@ import type { GameState, Move, NodeId } from "@/lib/game/types";
 import { ThemedPiece as Piece } from "./themed-piece";
 import { CapeCodBackground } from "./cape-cod-background";
 import { ForestBackground } from "./forest-background";
+import { SandBackground } from "./sand-background";
 import { themeLabels, type BoardTheme } from "@/lib/presentation/board-themes";
 
 export function Board({
@@ -92,6 +93,7 @@ export function Board({
   return (
     <svg
       className={`game-board${finished || state.result ? " is-finished" : ""}`}
+      data-board-theme={theme}
       viewBox="0 0 520 520"
       aria-label={
         interactive
@@ -125,15 +127,25 @@ export function Board({
           <path d="M0 0 6 3 0 6z" fill="var(--board-accent)" />
         </marker>
       </defs>
-      {theme === "tigers-goats" ? <ForestBackground /> : <CapeCodBackground />}
-      <rect
-        x="18"
-        y="18"
-        width="484"
-        height="484"
-        rx="20"
-        fill="url(#board-glow)"
-      />
+      {theme === "sand" ? (
+        <SandBackground />
+      ) : (
+        <>
+          {theme === "tigers-goats" ? (
+            <ForestBackground />
+          ) : (
+            <CapeCodBackground />
+          )}
+          <rect
+            x="18"
+            y="18"
+            width="484"
+            height="484"
+            rx="20"
+            fill="url(#board-glow)"
+          />
+        </>
+      )}
       <rect
         x="43"
         y="43"
