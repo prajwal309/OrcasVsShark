@@ -400,7 +400,7 @@ test("the branded home links navigate to their features", async ({ page }) => {
   ).toHaveCount(0);
 });
 
-test("the footer links to About, The Project, and Contact & Feedback", async ({
+test("the footer links to site information and Baghchal support", async ({
   page,
 }) => {
   await page.goto("/");
@@ -425,6 +425,11 @@ test("the footer links to About, The Project, and Contact & Feedback", async ({
       link: "Contact & Feedback",
       url: "/about#contact",
       heading: "Contact & Feedback",
+    },
+    {
+      link: "Support Baghchal",
+      url: "/support",
+      heading: "Preserve a Tradition. Build Its Future.",
     },
   ];
   for (const { link, url, heading } of sections) {
@@ -457,7 +462,85 @@ test("the footer links to About, The Project, and Contact & Feedback", async ({
     "href",
     "https://github.com/prajwal309/OrcasVsShark/issues",
   );
+  await page.goto("/");
+  const landingSupport = page
+    .getByRole("main")
+    .getByRole("link", { name: "Support Baghchal", exact: true });
+  const supportGoal = page.locator("#lobby-support-goal");
+  await expect(supportGoal).toHaveCSS("opacity", "0");
+  await landingSupport.hover();
+  await expect(supportGoal).toHaveCSS("opacity", "1");
+  await expect(supportGoal).toContainText(
+    "Our next goal is to help cover the server rental.",
+  );
+  await landingSupport.click();
+  await expect(page).toHaveURL("/support");
+  await expect(
+    page.getByRole("heading", {
+      name: "Preserve a Tradition. Build Its Future.",
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: /Buy Me a Coffee/ }),
+  ).toHaveAttribute("href", "https://buymeacoffee.com/fznfire");
+  const milestoneDetails = page.locator("details");
+  await expect(milestoneDetails).toHaveCount(4);
+  for (const title of [
+    "Keep the Game Running",
+    "Improve the Gaming Experience",
+    "Grow the Community",
+    "Bring Baghchal to Mobile",
+  ]) {
+    const milestone = milestoneDetails.filter({ hasText: title });
+    await milestone.locator("summary").click();
+    await expect(
+      milestone.getByText("Planned use at this cumulative milestone"),
+    ).toBeVisible();
+  }
+  await expect(
+    page.getByText(/not actual spending or confirmed budgets/),
+  ).toBeVisible();
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(page.viewportSize()!.width);
+});
+
+test("the hero keeps play, learning, and support actions distinct", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const actions = page.locator(".lobby-hero-actions");
+  await expect(actions.getByRole("link")).toHaveCount(3);
+
+  const playNow = actions.getByRole("link", { name: "Play Now" });
+  const learn = actions.getByRole("link", { name: "Learn to Play" });
+  const support = actions.getByRole("link", { name: "Support Baghchal" });
+  await expect(playNow).toHaveCSS("background-color", "rgb(213, 165, 71)");
+  await expect(support).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(support).toHaveCSS("border-top-color", "rgb(110, 76, 18)");
+  if (page.viewportSize()!.width > 900) {
+    const bounds = await Promise.all(
+      [playNow, learn, support].map((link) => link.boundingBox()),
+    );
+    expect(bounds.every((box) => box?.height === bounds[0]?.height)).toBe(true);
+    expect(
+      Math.max(...bounds.map((box) => box!.y)) -
+        Math.min(...bounds.map((box) => box!.y)),
+    ).toBeLessThan(1);
+  }
+
+  const supportGoal = page.locator("#lobby-support-goal");
+  await expect(supportGoal).toHaveCSS("opacity", "0");
+  await support.hover();
+  await expect(supportGoal).toHaveCSS("opacity", "1");
+  await playNow.click();
+  await expect(page).toHaveURL("/play");
+
+  await page.goto("/");
+  await learn.click();
+  await expect(page).toHaveURL("/learn");
+
+  await page.goto("/");
+  await support.click();
+  await expect(page).toHaveURL("/support");
 });

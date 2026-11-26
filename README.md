@@ -1,6 +1,6 @@
 # GridLox Games
 
-GridLox Games is home to **Orcas vs Sharks**, an original ocean-themed adaptation of Bagh Chal, the traditional asymmetric strategy game of Nepal. Four Orcas capture and twenty Sharks surround.
+GridLox Games is home to **Orcas vs Sharks**, an original ocean-themed adaptation of Baghchal, the traditional asymmetric strategy game of Nepal. Four Orcas capture and twenty Sharks surround.
 
 ## Current scope
 

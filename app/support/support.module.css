@@ -1,0 +1,265 @@
+.page {
+  max-width: 1040px;
+  padding-block: 32px 56px;
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+  align-items: center;
+  gap: clamp(24px, 5vw, 56px);
+  padding: clamp(22px, 4vw, 38px);
+  border: 1px solid var(--line);
+  border-top-color: var(--hairline);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 8px 26px var(--shadow);
+}
+
+.heroCopy {
+  max-width: 650px;
+}
+
+.eyebrow {
+  margin: 0 0 10px;
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.hero h1 {
+  margin: 0 0 14px;
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: clamp(2.2rem, 5vw, 3.5rem);
+  font-weight: 500;
+  letter-spacing: -0.035em;
+  line-height: 1.08;
+}
+
+.heroCopy > p:last-child {
+  max-width: 58ch;
+  margin: 0;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1.7;
+}
+
+.supportCard {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-raised);
+}
+
+.supportCard > p {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.coffeeButton {
+  display: inline-flex;
+  width: 100%;
+  min-height: 50px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 16px;
+  text-align: center;
+}
+
+.supportCard small {
+  color: var(--muted);
+  line-height: 1.5;
+  text-align: center;
+}
+
+.promise {
+  margin: 22px 0 30px;
+  padding: 16px 20px;
+  border-left: 3px solid var(--gold);
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 1.08rem;
+  line-height: 1.65;
+}
+
+.milestoneSection {
+  display: grid;
+  gap: 16px;
+}
+
+.sectionHeading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+}
+
+.sectionHeading h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.5rem, 3vw, 1.9rem);
+  font-weight: 500;
+}
+
+.sectionHeading > p {
+  max-width: 46ch;
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.milestones {
+  display: grid;
+  gap: 10px;
+}
+
+.milestone {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.milestone[open] {
+  border-color: var(--control-line);
+}
+
+.milestone summary {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr) 24px;
+  align-items: center;
+  gap: 8px 14px;
+  min-height: 62px;
+  padding: 12px 18px;
+  color: var(--text);
+  cursor: pointer;
+  list-style: none;
+}
+
+.milestone summary::-webkit-details-marker {
+  display: none;
+}
+
+.milestone summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
+  border-radius: 8px;
+}
+
+.milestone summary:hover .milestoneTitle,
+.milestone[open] .milestoneTitle {
+  color: var(--accent);
+}
+
+.amount {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  font-weight: 750;
+}
+
+.milestoneTitle {
+  font-family: var(--font-display);
+  font-size: 1.08rem;
+  font-weight: 600;
+}
+
+.toggle {
+  position: relative;
+  width: 20px;
+  height: 20px;
+  justify-self: end;
+  border: 1px solid var(--control-line);
+  border-radius: 50%;
+}
+
+.toggle::before,
+.toggle::after {
+  position: absolute;
+  top: 9px;
+  left: 5px;
+  width: 8px;
+  height: 1px;
+  background: currentColor;
+  content: "";
+}
+
+.toggle::after {
+  transform: rotate(90deg);
+}
+
+.milestone[open] .toggle::after {
+  transform: none;
+}
+
+.breakdown {
+  padding: 0 22px 18px 122px;
+  color: var(--muted);
+}
+
+.breakdown p {
+  margin: 0 0 8px;
+  color: var(--text);
+  font-size: 0.875rem;
+}
+
+.breakdown ul {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding-left: 18px;
+  line-height: 1.5;
+}
+
+.breakdown li::marker {
+  color: var(--accent);
+}
+
+.disclosure {
+  margin: 16px 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.55;
+}
+
+@media (max-width: 700px) {
+  .hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .supportCard {
+    max-width: 360px;
+  }
+}
+
+@media (max-width: 480px) {
+  .page {
+    padding-top: 20px;
+  }
+
+  .hero {
+    gap: 20px;
+    padding: 20px;
+  }
+
+  .milestone summary {
+    grid-template-columns: 72px minmax(0, 1fr) 20px;
+    gap: 8px;
+    padding-inline: 12px;
+  }
+
+  .milestoneTitle {
+    font-size: 1rem;
+  }
+
+  .breakdown {
+    padding: 0 16px 16px;
+  }
+}

@@ -16,7 +16,7 @@ test("opens Tigers and Goats from home and carries the theme into daily play", a
   await page.goto("/");
   await page.getByRole("link", { name: "Play Tigers & Goats" }).click();
   await expect(page).toHaveURL("/tigers-and-goats");
-  await expect(page).toHaveTitle(/Play Tigers and Goats \(Bagh Chal\)/);
+  await expect(page).toHaveTitle(/Play Tigers and Goats \(Baghchal\)/);
   await expect(
     page.getByRole("heading", { name: "Tigers & Goats" }),
   ).toBeVisible();

@@ -1,4 +1,4 @@
-# Canonical rules: bagh-chal-ocean-v1
+# Canonical rules: Baghchal
 
 Engine version: 1.0.0. The authority is AGENTS.md.
 

@@ -12,6 +12,9 @@ export function SiteFooter() {
         <nav className="site-footer-links" aria-label="Footer">
           <Link href="/about">About</Link>
           <Link href="/about#project">The Project</Link>
+          <Link className="site-footer-support" href="/support">
+            Support Baghchal
+          </Link>
           <Link href="/about#contact">Contact &amp; Feedback</Link>
         </nav>
       </div>

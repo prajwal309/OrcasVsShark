@@ -971,6 +971,12 @@ footer a {
 .site-footer-links a:hover {
   text-decoration: underline;
 }
+.site-footer-links .site-footer-support {
+  color: var(--accent);
+}
+.site-footer-links .site-footer-support:hover {
+  color: var(--text);
+}
 @media (max-width: 900px) {
   .site-footer {
     padding-inline: 22px;
@@ -2377,6 +2383,57 @@ dialog > p,
 .lobby-secondary-button:hover {
   border-color: var(--accent);
   background: var(--surface-tint);
+}
+.lobby-support-cta {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.lobby-support-cta:hover {
+  border-color: var(--accent);
+  background: var(--surface-tint);
+  color: var(--accent);
+}
+.lobby-support-cta svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+.lobby-support-tooltip {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 8px);
+  left: 50%;
+  width: max-content;
+  max-width: min(260px, 80vw);
+  padding: 8px 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--navy);
+  box-shadow: 0 6px 18px var(--shadow);
+  color: var(--ivory);
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1.4;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -3px);
+  transition:
+    opacity 140ms,
+    transform 140ms;
+}
+.lobby-support-cta:hover .lobby-support-tooltip,
+.lobby-support-cta:focus-visible .lobby-support-tooltip {
+  opacity: 1;
+  transform: translate(-50%, 0);
 }
 .lobby-board-preview {
   width: min(100%, 430px);
