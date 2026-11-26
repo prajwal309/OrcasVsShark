@@ -98,6 +98,27 @@ describe("ranked PostgreSQL games", () => {
       );
   });
 
+  it("returns each played time control's position in leaderboard order", async () => {
+    for (const [player, rating] of [
+      ["alpha", 1700],
+      ["bravo", 1700],
+      ["charlie", 1800],
+      ["delta", 1600],
+    ] as const) {
+      await db.query(
+        "UPDATE player_ratings SET rating = $2, wins = 1 WHERE player_id = $1 AND mode = 'fast'",
+        [player, rating],
+      );
+    }
+
+    expect((await playerProfile(db, "alpha"))?.ranks).toEqual([
+      { mode: "fast", rank: 2 },
+    ]);
+    expect((await playerProfile(db, "charlie"))?.ranks).toEqual([
+      { mode: "fast", rank: 1 },
+    ]);
+  });
+
   async function pair(mode: "fast" | "medium" | "classic" = "fast") {
     await tx((db) => updateQueue(db, "alpha", "enter", mode, base));
     const search = await tx((db) =>

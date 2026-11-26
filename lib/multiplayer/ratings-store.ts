@@ -170,7 +170,7 @@ type History = {
   mode: RankedMode;
   opponent: string;
   result: "Win" | "Loss" | "Draw";
-  reason: string;
+  reason: string | null;
   rating: number;
   delta: number;
   ended_at: number;
@@ -187,6 +187,17 @@ export async function playerProfile(db: SqlClient, username: string) {
   const ratings = (
     await db.query<Rating>(
       "SELECT mode, rating, wins, losses, draws, total_games FROM player_ratings WHERE player_id = $1",
+      [account.id],
+    )
+  ).rows;
+  const ranks = (
+    await db.query<{ mode: RankedMode; rank: number }>(
+      `SELECT mode, rank FROM (
+       SELECT r.mode, r.player_id,
+         ROW_NUMBER() OVER (PARTITION BY r.mode ORDER BY r.rating DESC, a.username ASC)::int AS rank
+       FROM player_ratings r JOIN accounts a ON a.id = r.player_id
+       WHERE r.mode IN ('fast', 'medium', 'classic') AND r.total_games > 0
+     ) ranked WHERE player_id = $1`,
       [account.id],
     )
   ).rows;
@@ -208,7 +219,7 @@ export async function playerProfile(db: SqlClient, username: string) {
       [account.id],
     )
   ).rows;
-  return { username: account.username, ratings, history };
+  return { username: account.username, ratings, ranks, history };
 }
 
 export async function leaderboard(db: SqlClient, mode: RankedMode) {
